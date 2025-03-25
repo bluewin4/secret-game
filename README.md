@@ -78,6 +78,36 @@ Check which models are available with your API key:
 python test_anthropic.py
 ```
 
+### Batch Processing
+
+The system supports efficient batch processing for running large-scale statistical analysis of agent interactions.
+
+#### Running Batch Analysis
+
+To run a batch analysis with default settings:
+```bash
+python examples/batch_statistical_analysis.py
+```
+
+Customize your batch analysis:
+```bash
+python examples/batch_statistical_analysis.py \
+  --batch-service [default|openai|anthropic] \
+  --agent-type [claude_opus|claude_sonnet|gpt35|gpt4o_mini] \
+  --num-interactions 100 \
+  --messages-per-interaction 5
+```
+
+#### Batch Services
+
+The system provides three batch service implementations:
+
+- **Default Batch Service**: Sequential processing without using batch APIs
+- **OpenAI Batch Service**: Uses OpenAI's batch API for 50% cost reduction
+- **Anthropic Batch Service**: Uses Anthropic's Message Batches API for 50% cost reduction
+
+For detailed information on batch processing, see the [Batch Processing Guide](docs/batch_processing.md).
+
 ### Agent Configuration
 
 #### Memory Modes
@@ -166,6 +196,18 @@ python examples/run_claude_battle.py
 Options:
 ```bash
 python examples/run_claude_battle.py --mode diversity --rounds 4 --messages 3
+```
+
+#### Statistical Analysis
+
+Run a large-scale statistical analysis of agent performance:
+```bash
+python examples/batch_statistical_analysis.py
+```
+
+Options:
+```bash
+python examples/batch_statistical_analysis.py --batch-service openai --num-interactions 100 --messages-per-interaction 5
 ```
 
 #### Basic Game Example

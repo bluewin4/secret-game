@@ -18,4 +18,11 @@ from .aggressive_agents import (
     AggressiveClaudeAgent,
     AggressiveClaudeHaikuAgent,
     AggressiveClaudeSonnetAgent
-) 
+)
+from .batch_service import (
+    BatchService,
+    BatchJob,
+    BatchTask
+)
+from .openai_batch_service import OpenAIBatchService
+from .anthropic_batch_service import AnthropicBatchService 

@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "timestamp": "20250325_183721",
+    "total_games": 2,
+    "completed_games": 0,
+    "failed_games": 2,
+    "game_mode": "standard",
+    "rounds": 2,
+    "messages_per_round": 2,
+    "total_api_calls": 0,
+    "total_tokens": 0
+  },
+  "results": []
+}

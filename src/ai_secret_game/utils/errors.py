@@ -22,4 +22,17 @@ class ConfigError(Exception):
     
     This exception is raised when there's an error in the application configuration.
     """
+    pass
+
+
+class BatchError(Exception):
+    """Base exception for batch processing-related errors.
+    
+    This exception is raised when there's an error during batch processing of game interactions.
+    
+    Examples:
+        - Batch job not found
+        - Error in batch API call
+        - Error processing batch results
+    """
     pass 

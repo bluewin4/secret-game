@@ -88,3 +88,7 @@ class Game:
                 "targeted_secret_points": self.targeted_secret_points
             }
         return {} 
+
+
+
+     
