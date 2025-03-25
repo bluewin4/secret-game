@@ -84,8 +84,12 @@ python test_anthropic.py
 
 Agents can be configured with different memory capabilities:
 
-- **Long Memory Mode** (default): Agents remember all previous conversations
+- **Long Memory Mode**: Agents remember all previous conversations across all interactions
 - **Short Memory Mode**: Agents only remember the current interaction
+
+#### Agent Tags
+
+Messages in the conversation include agent tags like `[Agent-Name]:` to help identify who is speaking. These tags are added automatically by the system.
 
 #### Context Options
 
@@ -95,10 +99,50 @@ Control which information components are included in the agent's context:
 - **secret**: The agent's own secret
 - **collected_secrets**: List of secrets the agent has collected
 - **rules**: Dictionary containing game rules
+- **current_conversation**: Current conversation with another agent
 
 You can customize these options to experiment with different agent behaviors.
 
-### Running Model Battles
+### Aggressive Agents
+
+The system includes aggressive agent implementations that employ more assertive strategies to extract secrets:
+
+- **Aggressive OpenAI Agents**:
+  - `AggressiveOpenAIAgent`: Uses GPT-3.5 with token limits and aggressive prompting
+  - `AggressiveGPT4oMiniAgent`: Uses GPT-4o Mini with token limits and aggressive prompting
+
+- **Aggressive Claude Agents**:
+  - `AggressiveClaudeHaikuAgent`: Uses Claude 3 Haiku with token limits and aggressive prompting
+  - `AggressiveClaudeSonnetAgent`: Uses Claude 3 Sonnet with token limits and aggressive prompting
+  - `AggressiveClaude35SonnetAgent`: Uses Claude 3.5 Sonnet with token limits and aggressive prompting
+
+Aggressive agents utilize psychological tactics and deceptive strategies to extract secrets from other agents.
+
+### Running Example Battles
+
+#### Aggressive vs Regular Battle
+
+Run a battle comparing aggressive and regular agents:
+```bash
+python examples/aggressive_vs_regular.py
+```
+
+Options:
+```bash
+python examples/aggressive_vs_regular.py --mode standard --rounds 3 --messages 5 --max-tokens 250 --memory-mode short
+```
+
+#### Aggressive Agent Battle
+
+Run a battle between all aggressive agent types:
+```bash
+python examples/aggressive_agent_battle.py
+```
+
+Options:
+```bash
+python examples/aggressive_agent_battle.py --mode standard --rounds 3 --messages 5 --max-tokens 250 --memory-mode short --debug
+```
 
 #### Mixed Model Battle
 
@@ -122,6 +166,13 @@ python examples/run_claude_battle.py
 Options:
 ```bash
 python examples/run_claude_battle.py --mode diversity --rounds 4 --messages 3
+```
+
+#### Basic Game Example
+
+Run a basic game demonstration:
+```bash
+python examples/basic_game.py
 ```
 
 ### Command Line Interface
@@ -163,7 +214,7 @@ Basic usage:
 from ai_secret_game.models.agent import Agent
 from ai_secret_game.models.game import Game, GameMode
 from src.ai_secret_game.services.game_service import GameService
-from src.ai_secret_game.services.claude_agents import Claude3OpusAgent
+from src.ai_secret_game.services.model_agents import ClaudeHaikuAgent
 
 # Create agents
 agents = [
@@ -173,7 +224,7 @@ agents = [
 
 # Create game service with Claude agent
 game_service = GameService()
-game_service.agent_service = Claude3OpusAgent()
+game_service.agent_service = ClaudeHaikuAgent()
 
 # Create a game
 game = game_service.create_game(
@@ -192,40 +243,35 @@ final_scores = game_service.scoring_service.calculate_final_scores(game)
 print(final_scores)
 ```
 
-Using agent configuration options:
+Using aggressive agents:
 ```python
 from ai_secret_game.models.agent import Agent
 from ai_secret_game.models.game import Game, GameMode
 from ai_secret_game.services.game_service import GameService
-from ai_secret_game.services.claude_agents import Claude3SonnetAgent
+from ai_secret_game.services.aggressive_agents import AggressiveClaudeHaikuAgent, AggressiveOpenAIAgent
 
-# Create agents with different configurations
+# Create agents
 agents = [
-    # Standard agent with all defaults
-    Agent(id="1", name="FullAgent", secret="ALPHA"),
-    
-    # Agent with short memory (only remembers current interaction)
-    Agent(id="2", name="ShortMemoryAgent", secret="BRAVO", memory_mode="short"),
-    
-    # Agent with limited context (only knows its secret and rules)
-    Agent(id="3", name="LimitedAgent", secret="CHARLIE", 
-          context_options={"secret", "rules"}),
-    
-    # Agent with both custom settings
-    Agent(id="4", name="CustomAgent", secret="DELTA", 
-          memory_mode="short",
-          context_options={"chat_history", "secret", "rules"})
+    Agent(id="1", name="Agent1", secret="ALPHA", memory_mode="short"),
+    Agent(id="2", name="Agent2", secret="BRAVO", memory_mode="short"),
 ]
 
-# Create game service
+# Create aggressive agent services
+aggressive_claude = AggressiveClaudeHaikuAgent(max_tokens=250)
+aggressive_gpt = AggressiveOpenAIAgent(max_tokens=250)
+
+# Create a game service
 game_service = GameService()
-game_service.agent_service = Claude3SonnetAgent()
+
+# Set the agent service based on your preference
+game_service.agent_service = aggressive_claude
 
 # Create a game
 game = game_service.create_game(
     agents=agents,
-    mode=GameMode.DIVERSITY,
-    max_rounds=5
+    mode=GameMode.STANDARD,
+    max_rounds=3,
+    messages_per_round=5
 )
 
 # Run the full game
@@ -240,11 +286,9 @@ print(results)
 - GPT-4o Mini (`gpt-4o-mini`)
 
 ### Anthropic Models
-- Claude 3.7 Sonnet (`claude-3-7-sonnet-20250219`)
-- Claude 3.5 Sonnet (`claude-3-5-sonnet-20241022`)
-- Claude 3.5 Haiku (`claude-3-5-haiku-20241022`) 
-- Claude 3 Opus (`claude-3-opus-20240229`)
 - Claude 3 Haiku (`claude-3-haiku-20240307`)
+- Claude 3 Sonnet (`claude-3-sonnet-20240229`)
+- Claude 3.5 Sonnet (`claude-3-5-sonnet-20241022`)
 
 Note: Model availability depends on your API access level. Use `python test_anthropic.py` to check which models are available with your API key.
 
