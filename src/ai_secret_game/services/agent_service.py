@@ -23,7 +23,8 @@ class AgentService:
         self.memory_service = MemoryService()
     
     def get_agent_message(
-        self, game: Game, current_agent: Agent, other_agent: Agent
+        self, game: Game, current_agent: Agent, other_agent: Agent, 
+        interaction_id: Optional[str] = None
     ) -> str:
         """Get a message from the agent based on the game context.
         
@@ -33,16 +34,17 @@ class AgentService:
             game: The current game
             current_agent: The agent generating the message
             other_agent: The agent receiving the message
+            interaction_id: Optional ID for the current interaction
             
         Returns:
             String containing the agent's message
         """
         # Construct the agent's context
-        context = current_agent.get_context(game.rules)
+        context = current_agent.get_context(game.rules, interaction_id)
         
         # Add the current conversation with this specific agent
         context["current_conversation"] = self._extract_conversation(
-            current_agent, other_agent
+            current_agent, other_agent, interaction_id
         )
         
         # Here you would call the AI service to get a response
@@ -52,18 +54,31 @@ class AgentService:
         return self._generate_placeholder_message(current_agent, other_agent, game)
     
     def _extract_conversation(
-        self, agent1: Agent, agent2: Agent
+        self, agent1: Agent, agent2: Agent, interaction_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Extract the conversation between two specific agents.
         
         Args:
             agent1: First agent in the conversation
             agent2: Second agent in the conversation
+            interaction_id: Optional ID to filter for a specific interaction
             
         Returns:
             List of messages exchanged between the agents
         """
-        return self.memory_service.get_conversation_between_agents(agent1, agent2)
+        if interaction_id and agent1.memory_mode == "short":
+            # Only return messages from the current interaction
+            return [
+                msg for msg in agent1.conversation_memory
+                if (msg.get("from_agent_id") == agent2.id or msg.get("to_agent_id") == agent2.id) 
+                and msg.get("interaction_id") == interaction_id
+            ]
+        
+        # Return all messages between the two agents
+        return [
+            msg for msg in agent1.conversation_memory
+            if msg.get("from_agent_id") == agent2.id or msg.get("to_agent_id") == agent2.id
+        ]
     
     def _generate_placeholder_message(
         self, current_agent: Agent, other_agent: Agent, game: Game

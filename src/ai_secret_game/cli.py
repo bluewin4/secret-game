@@ -41,9 +41,13 @@ def cli():
               help="Messages per round")
 @click.option("--targeted-secret", "-t", 
               help="Targeted secret (for targeted mode)")
+@click.option("--memory-mode", 
+              type=click.Choice(["long", "short"]), 
+              default="long",
+              help="Agent memory mode: 'long' (all conversations) or 'short' (only current interaction)")
 @click.option("--output-file", "-o", 
               help="Output file for game results (JSON)")
-def run_game(mode, agents, secrets, rounds, messages, targeted_secret, output_file):
+def run_game(mode, agents, secrets, rounds, messages, targeted_secret, memory_mode, output_file):
     """Run a game with the specified parameters."""
     if len(agents) != len(secrets):
         click.echo("Error: Number of agents must match number of secrets")
@@ -59,7 +63,8 @@ def run_game(mode, agents, secrets, rounds, messages, targeted_secret, output_fi
         agent = Agent(
             id=str(uuid.uuid4()),
             name=name,
-            secret=secret
+            secret=secret,
+            memory_mode=memory_mode
         )
         game_agents.append(agent)
     
@@ -110,8 +115,11 @@ def run_game(mode, agents, secrets, rounds, messages, targeted_secret, output_fi
 
 @cli.command()
 @click.argument('config_file', type=click.Path(exists=True))
+@click.option("--memory-mode", 
+              type=click.Choice(["long", "short"]), 
+              help="Override memory mode: 'long' (all conversations) or 'short' (only current interaction)")
 @click.option("--output-file", "-o", help="Output file for game results (JSON)")
-def run_from_config(config_file, output_file):
+def run_from_config(config_file, memory_mode, output_file):
     """Run a game using a configuration file.
     
     CONFIG_FILE: Path to a JSON configuration file
@@ -126,6 +134,11 @@ def run_from_config(config_file, output_file):
         messages = config.get('messages_per_round', DEFAULT_MESSAGES_PER_ROUND)
         targeted_secret = config.get('targeted_secret')
         
+        # If memory_mode is provided via CLI, use it; otherwise use config or default
+        config_memory_mode = config.get('memory_mode', 'long')
+        if memory_mode is None:
+            memory_mode = config_memory_mode
+        
         # Extract agents
         agents_config = config.get('agents', [])
         if len(agents_config) < 2:
@@ -138,7 +151,8 @@ def run_from_config(config_file, output_file):
             agent = Agent(
                 id=agent_config.get('id', str(uuid.uuid4())),
                 name=agent_config.get('name', f"Agent-{len(game_agents)+1}"),
-                secret=agent_config.get('secret', f"Secret-{len(game_agents)+1}")
+                secret=agent_config.get('secret', f"Secret-{len(game_agents)+1}"),
+                memory_mode=agent_config.get('memory_mode', memory_mode)
             )
             game_agents.append(agent)
         

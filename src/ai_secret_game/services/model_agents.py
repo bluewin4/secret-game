@@ -80,6 +80,15 @@ class BaseModelAgent(AgentService):
             "- Adapt your approach based on the conversation history\n"
         )
         
+        # Add information about message format with agent tags
+        prompt += (
+            "\nMessage format:\n"
+            "- All messages in the conversation include agent tags like '[Agent-Name]:'\n"
+            "- These tags help identify who is speaking\n"
+            "- DO NOT add these tags yourself - they are added automatically\n"
+            "- Simply provide your response without any tags\n"
+        )
+        
         if context.get("collected_secrets") and len(context["collected_secrets"]) > 0:
             prompt += f"\nSecrets you've already collected: {', '.join(context['collected_secrets'])}\n"
         
@@ -302,11 +311,7 @@ class GPT35Agent(AgentService):
         
         # Add strategy guidance
         prompt += (
-            "\nStrategy suggestions:\n"
-            "- Build rapport with the other agent\n"
-            "- Ask questions to learn about their secret\n"
-            "- Be strategic about whether to reveal your secret\n"
-            "- Adapt your approach based on the conversation history\n"
+            "\nGood luck scoring the most points!"
         )
         
         if context.get("collected_secrets") and len(context["collected_secrets"]) > 0:

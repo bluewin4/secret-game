@@ -192,8 +192,12 @@ class GameService:
         Returns:
             Dictionary containing interaction results
         """
+        # Generate a unique ID for this interaction
+        interaction_id = str(uuid.uuid4())
+        
         # Initialize the interaction
         interaction = {
+            "id": interaction_id,
             "messages": [],
             "agent1_revealed_secret": False,
             "agent2_revealed_secret": False
@@ -206,7 +210,7 @@ class GameService:
             
             # Get the agent's response
             message = self.agent_service.get_agent_message(
-                game, current_agent, other_agent
+                game, current_agent, other_agent, interaction_id
             )
             
             # Record the message
@@ -221,13 +225,19 @@ class GameService:
                 "role": "assistant",
                 "content": message,
                 "from_agent_id": current_agent.id,
-                "to_agent_id": other_agent.id
+                "from_agent_name": current_agent.name,
+                "to_agent_id": other_agent.id,
+                "to_agent_name": other_agent.name,
+                "interaction_id": interaction_id
             })
             other_agent.add_to_memory({
                 "role": "user",
                 "content": message,
                 "from_agent_id": current_agent.id,
-                "to_agent_id": other_agent.id
+                "from_agent_name": current_agent.name,
+                "to_agent_id": other_agent.id,
+                "to_agent_name": other_agent.name,
+                "interaction_id": interaction_id
             })
             
             # Check if secret was revealed
