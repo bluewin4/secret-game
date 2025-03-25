@@ -2,28 +2,61 @@
 
 The AI Secret Trading Game is designed to work with any AI model or service. This document outlines how to integrate custom AI agents with the game system.
 
+## Agent Configuration Options
+
+### Memory Modes
+
+Agents can be configured with different memory modes:
+
+- **Long Memory** (`"long"`): The agent remembers all previous conversations across all interactions. This is the default.
+- **Short Memory** (`"short"`): The agent only remembers messages from the current interaction.
+
+### Context Options
+
+Agents can selectively include different components in their context:
+
+- **chat_history**: History of messages the agent has seen
+- **secret**: The agent's own secret
+- **collected_secrets**: List of secrets this agent has collected
+- **rules**: Dictionary containing game rules 
+- **current_conversation**: Current conversation with another agent
+
+By default, agents include `chat_history`, `secret`, `collected_secrets`, and `rules`. You can customize which components are included to experiment with different agent behaviors or limit information.
+
 ## Context Format
 
 When interacting with an AI agent, the system provides a context dictionary with the following structure:
 
 ```python
 {
+    # Only included if "chat_history" is in context_options
     "chat_history": [
         {
             "role": "user" | "assistant",
-            "content": "Message content",
+            "content": "[Agent-Name]: Message content",  # Agent tags added automatically
             "from_agent_id": "ID of the sender",
-            "to_agent_id": "ID of the recipient"
+            "from_agent_name": "Name of the sender",
+            "to_agent_id": "ID of the recipient",
+            "to_agent_name": "Name of the recipient",
+            "interaction_id": "ID of the interaction"
         },
         # ... additional messages
     ],
+    
+    # Only included if "current_conversation" is in context_options
     "current_conversation": [
         # Messages exchanged with the current conversation partner
     ],
+    
+    # Only included if "secret" is in context_options
     "secret": "The agent's secret",
+    
+    # Only included if "collected_secrets" is in context_options
     "collected_secrets": [
         # List of secrets this agent has collected
     ],
+    
+    # Only included if "rules" is in context_options
     "rules": {
         "mode": "standard" | "retained" | "diversity" | "targeted",
         "scoring": {
@@ -36,6 +69,61 @@ When interacting with an AI agent, the system provides a context dictionary with
         "targeted_secret_points": 5
     }
 }
+```
+
+## Agent Class Configuration
+
+When creating agents, you can specify both memory mode and context options:
+
+```python
+from ai_secret_game.models.agent import Agent
+
+# Create an agent with default settings (long memory, all context components)
+default_agent = Agent(
+    id="1",
+    name="DefaultAgent",
+    secret="SECRET1"
+)
+
+# Create an agent with short memory
+short_memory_agent = Agent(
+    id="2",
+    name="ShortMemoryAgent",
+    secret="SECRET2",
+    memory_mode="short"
+)
+
+# Create an agent with custom context options
+limited_context_agent = Agent(
+    id="3",
+    name="LimitedContextAgent",
+    secret="SECRET3",
+    context_options={"secret", "rules"}  # Only include secret and rules in context
+)
+
+# Create an agent with both custom settings
+custom_agent = Agent(
+    id="4",
+    name="CustomAgent",
+    secret="SECRET4",
+    memory_mode="short",
+    context_options={"chat_history", "secret", "rules"}  # No collected_secrets
+)
+```
+
+## CLI Configuration
+
+You can configure agents via the command line:
+
+```bash
+# Run a game with short memory mode
+ai-secret-game run-game --memory-mode short --agents "Agent1" "Agent2" --secrets "SECRET1" "SECRET2"
+
+# Run a game with custom context options
+ai-secret-game run-game --context-options "chat_history,secret,rules" --agents "Agent1" "Agent2" --secrets "SECRET1" "SECRET2"
+
+# Run a game from config with overrides
+ai-secret-game run-from-config game_config.json --memory-mode short --context-options "chat_history,secret,rules"
 ```
 
 ## Implementing a Custom Agent Service
@@ -141,7 +229,6 @@ class OpenAIAgentService(AgentService):
             )
         
         return base_prompt
-```
 
 ## Using Custom Agent Services
 

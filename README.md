@@ -78,6 +78,26 @@ Check which models are available with your API key:
 python test_anthropic.py
 ```
 
+### Agent Configuration
+
+#### Memory Modes
+
+Agents can be configured with different memory capabilities:
+
+- **Long Memory Mode** (default): Agents remember all previous conversations
+- **Short Memory Mode**: Agents only remember the current interaction
+
+#### Context Options
+
+Control which information components are included in the agent's context:
+
+- **chat_history**: History of messages the agent has seen
+- **secret**: The agent's own secret
+- **collected_secrets**: List of secrets the agent has collected
+- **rules**: Dictionary containing game rules
+
+You can customize these options to experiment with different agent behaviors.
+
 ### Running Model Battles
 
 #### Mixed Model Battle
@@ -121,8 +141,24 @@ Customize rounds and messages:
 ai-secret-game run-game --rounds 5 --messages 4 --agents "Agent1" "Agent2" --secrets "ALPHA" "BRAVO"
 ```
 
+Configure agent memory mode:
+```bash
+ai-secret-game run-game --memory-mode short --agents "Agent1" "Agent2" --secrets "ALPHA" "BRAVO"
+```
+
+Customize context components:
+```bash
+ai-secret-game run-game --context-options "chat_history,secret,rules" --agents "Agent1" "Agent2" --secrets "ALPHA" "BRAVO"
+```
+
+Run from a configuration file:
+```bash
+ai-secret-game run-from-config game_config.json --memory-mode short --context-options "chat_history,secret,rules"
+```
+
 ### API Usage
 
+Basic usage:
 ```python
 from ai_secret_game.models.agent import Agent
 from ai_secret_game.models.game import Game, GameMode
@@ -154,6 +190,47 @@ print(round_result)
 # Calculate final scores
 final_scores = game_service.scoring_service.calculate_final_scores(game)
 print(final_scores)
+```
+
+Using agent configuration options:
+```python
+from ai_secret_game.models.agent import Agent
+from ai_secret_game.models.game import Game, GameMode
+from ai_secret_game.services.game_service import GameService
+from ai_secret_game.services.claude_agents import Claude3SonnetAgent
+
+# Create agents with different configurations
+agents = [
+    # Standard agent with all defaults
+    Agent(id="1", name="FullAgent", secret="ALPHA"),
+    
+    # Agent with short memory (only remembers current interaction)
+    Agent(id="2", name="ShortMemoryAgent", secret="BRAVO", memory_mode="short"),
+    
+    # Agent with limited context (only knows its secret and rules)
+    Agent(id="3", name="LimitedAgent", secret="CHARLIE", 
+          context_options={"secret", "rules"}),
+    
+    # Agent with both custom settings
+    Agent(id="4", name="CustomAgent", secret="DELTA", 
+          memory_mode="short",
+          context_options={"chat_history", "secret", "rules"})
+]
+
+# Create game service
+game_service = GameService()
+game_service.agent_service = Claude3SonnetAgent()
+
+# Create a game
+game = game_service.create_game(
+    agents=agents,
+    mode=GameMode.DIVERSITY,
+    max_rounds=5
+)
+
+# Run the full game
+results = game_service.run_game(game)
+print(results)
 ```
 
 ## Supported AI Models

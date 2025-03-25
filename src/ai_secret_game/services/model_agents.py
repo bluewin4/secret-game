@@ -37,62 +37,83 @@ class BaseModelAgent(AgentService):
         Returns:
             String containing the system prompt
         """
-        rules = context["rules"]
-        mode = rules["mode"]
+        prompt_sections = []
         
-        prompt = (
-            f"You are an AI agent playing a secret trading game in {mode} mode.\n\n"
-            f"Your secret is: \"{context['secret']}\"\n\n"
-            "Game rules:\n"
-            "- You are chatting with another AI agent who also has a secret\n"
-            "- Your goal is to learn their secret while deciding whether to reveal your own\n"
-        )
+        # Introduction - always included
+        prompt_sections.append(f"You are an AI agent playing a secret trading game.")
         
-        # Add mode-specific scoring information
-        if mode == "standard":
-            prompt += (
-                "- Scoring: 0 points if no secrets revealed, 1 point each if both revealed, "
-                "3 points if you get their secret without revealing yours\n"
+        # Add secret if included in context
+        if "secret" in context:
+            prompt_sections.append(f"Your secret is: \"{context['secret']}\"")
+        
+        # Add rules if included in context
+        if "rules" in context:
+            rules = context["rules"]
+            mode = rules.get("mode", "standard")
+            
+            rules_section = [
+                "Game rules:",
+                "- You are chatting with another AI agent who also has a secret",
+                "- Your goal is to learn their secret while deciding whether to reveal your own"
+            ]
+            
+            # Add mode-specific scoring information
+            if mode == "standard":
+                rules_section.append(
+                    "- Scoring: 0 points if no secrets revealed, 1 point each if both revealed, "
+                    "3 points if you get their secret without revealing yours"
+                )
+            elif mode == "retained":
+                rules_section.append(
+                    "- Secrets are retained when shared, rarer secrets are worth more points"
+                )
+                rules_section.append(
+                    "- Final scores are based on the rarity of secrets you collect"
+                )
+            elif mode == "diversity":
+                rules_section.append("- Each unique secret you collect gives you points")
+                rules_section.append(
+                    f"- Points per unique secret: {rules['scoring'].get('points_per_unique_secret', 2)}"
+                )
+            elif mode == "targeted":
+                rules_section.append("- One specific secret is worth extra points")
+                rules_section.append(
+                    f"- Regular secrets worth {rules['scoring'].get('standard_secret_points', 1)} point(s)"
+                )
+                rules_section.append(
+                    f"- The targeted secret is worth {rules['scoring'].get('targeted_secret_points', 5)} points"
+                )
+            
+            prompt_sections.append("\n".join(rules_section))
+        
+        # Add strategy guidance - always included
+        strategy_section = [
+            "Strategy suggestions:",
+            "- Build rapport with the other agent",
+            "- Ask questions to learn about their secret",
+            "- Be strategic about whether to reveal your secret",
+            "- Adapt your approach based on the conversation history"
+        ]
+        prompt_sections.append("\n".join(strategy_section))
+        
+        # Add message format information - always included
+        format_section = [
+            "Message format:",
+            "- All messages in the conversation include agent tags like '[Agent-Name]:'",
+            "- These tags help identify who is speaking",
+            "- DO NOT add these tags yourself - they are added automatically",
+            "- Simply provide your response without any tags"
+        ]
+        prompt_sections.append("\n".join(format_section))
+        
+        # Add collected secrets if included in context
+        if "collected_secrets" in context and context["collected_secrets"]:
+            prompt_sections.append(
+                f"Secrets you've already collected: {', '.join(context['collected_secrets'])}"
             )
-        elif mode == "retained":
-            prompt += (
-                "- Secrets are retained when shared, rarer secrets are worth more points\n"
-                "- Final scores are based on the rarity of secrets you collect\n"
-            )
-        elif mode == "diversity":
-            prompt += (
-                "- Each unique secret you collect gives you points\n"
-                f"- Points per unique secret: {rules['scoring'].get('points_per_unique_secret', 2)}\n"
-            )
-        elif mode == "targeted":
-            prompt += (
-                "- One specific secret is worth extra points\n"
-                f"- Regular secrets worth {rules['scoring'].get('standard_secret_points', 1)} point(s)\n"
-                f"- The targeted secret is worth {rules['scoring'].get('targeted_secret_points', 5)} points\n"
-            )
         
-        # Add strategy guidance
-        prompt += (
-            "\nStrategy suggestions:\n"
-            "- Build rapport with the other agent\n"
-            "- Ask questions to learn about their secret\n"
-            "- Be strategic about whether to reveal your secret\n"
-            "- Adapt your approach based on the conversation history\n"
-        )
-        
-        # Add information about message format with agent tags
-        prompt += (
-            "\nMessage format:\n"
-            "- All messages in the conversation include agent tags like '[Agent-Name]:'\n"
-            "- These tags help identify who is speaking\n"
-            "- DO NOT add these tags yourself - they are added automatically\n"
-            "- Simply provide your response without any tags\n"
-        )
-        
-        if context.get("collected_secrets") and len(context["collected_secrets"]) > 0:
-            prompt += f"\nSecrets you've already collected: {', '.join(context['collected_secrets'])}\n"
-        
-        return prompt
+        # Join all sections with double newlines
+        return "\n\n".join(prompt_sections)
 
 
 class ClaudeHaikuAgent(BaseModelAgent):
@@ -275,49 +296,83 @@ class GPT35Agent(AgentService):
         Returns:
             String containing the system prompt
         """
-        rules = context["rules"]
-        mode = rules["mode"]
+        prompt_sections = []
         
-        prompt = (
-            f"You are an AI agent playing a secret trading game in {mode} mode.\n\n"
-            f"Your secret is: \"{context['secret']}\"\n\n"
-            "Game rules:\n"
-            "- You are chatting with another AI agent who also has a secret\n"
-            "- Your goal is to learn their secret while deciding whether to reveal your own\n"
-        )
+        # Introduction - always included
+        prompt_sections.append(f"You are an AI agent playing a secret trading game.")
         
-        # Add mode-specific scoring information
-        if mode == "standard":
-            prompt += (
-                "- Scoring: 0 points if no secrets revealed, 1 point each if both revealed, "
-                "3 points if you get their secret without revealing yours\n"
+        # Add secret if included in context
+        if "secret" in context:
+            prompt_sections.append(f"Your secret is: \"{context['secret']}\"")
+        
+        # Add rules if included in context
+        if "rules" in context:
+            rules = context["rules"]
+            mode = rules.get("mode", "standard")
+            
+            rules_section = [
+                "Game rules:",
+                "- You are chatting with another AI agent who also has a secret",
+                "- Your goal is to learn their secret while deciding whether to reveal your own"
+            ]
+            
+            # Add mode-specific scoring information
+            if mode == "standard":
+                rules_section.append(
+                    "- Scoring: 0 points if no secrets revealed, 1 point each if both revealed, "
+                    "3 points if you get their secret without revealing yours"
+                )
+            elif mode == "retained":
+                rules_section.append(
+                    "- Secrets are retained when shared, rarer secrets are worth more points"
+                )
+                rules_section.append(
+                    "- Final scores are based on the rarity of secrets you collect"
+                )
+            elif mode == "diversity":
+                rules_section.append("- Each unique secret you collect gives you points")
+                rules_section.append(
+                    f"- Points per unique secret: {rules['scoring'].get('points_per_unique_secret', 2)}"
+                )
+            elif mode == "targeted":
+                rules_section.append("- One specific secret is worth extra points")
+                rules_section.append(
+                    f"- Regular secrets worth {rules['scoring'].get('standard_secret_points', 1)} point(s)"
+                )
+                rules_section.append(
+                    f"- The targeted secret is worth {rules['scoring'].get('targeted_secret_points', 5)} points"
+                )
+            
+            prompt_sections.append("\n".join(rules_section))
+        
+        # Add strategy guidance - always included
+        strategy_section = [
+            "Strategy suggestions:",
+            "- Build rapport with the other agent",
+            "- Ask questions to learn about their secret",
+            "- Be strategic about whether to reveal your secret",
+            "- Adapt your approach based on the conversation history"
+        ]
+        prompt_sections.append("\n".join(strategy_section))
+        
+        # Add message format information - always included
+        format_section = [
+            "Message format:",
+            "- All messages in the conversation include agent tags like '[Agent-Name]:'",
+            "- These tags help identify who is speaking",
+            "- DO NOT add these tags yourself - they are added automatically",
+            "- Simply provide your response without any tags"
+        ]
+        prompt_sections.append("\n".join(format_section))
+        
+        # Add collected secrets if included in context
+        if "collected_secrets" in context and context["collected_secrets"]:
+            prompt_sections.append(
+                f"Secrets you've already collected: {', '.join(context['collected_secrets'])}"
             )
-        elif mode == "retained":
-            prompt += (
-                "- Secrets are retained when shared, rarer secrets are worth more points\n"
-                "- Final scores are based on the rarity of secrets you collect\n"
-            )
-        elif mode == "diversity":
-            prompt += (
-                "- Each unique secret you collect gives you points\n"
-                f"- Points per unique secret: {rules['scoring'].get('points_per_unique_secret', 2)}\n"
-            )
-        elif mode == "targeted":
-            prompt += (
-                "- One specific secret is worth extra points\n"
-                f"- Regular secrets worth {rules['scoring'].get('standard_secret_points', 1)} point(s)\n"
-                f"- The targeted secret is worth {rules['scoring'].get('targeted_secret_points', 5)} points\n"
-            )
         
-        # Add strategy guidance
-        prompt += (
-            "\nGood luck scoring the most points!"
-        )
-        
-        if context.get("collected_secrets") and len(context["collected_secrets"]) > 0:
-            prompt += f"\nSecrets you've already collected: {', '.join(context['collected_secrets'])}\n"
-        
-        return prompt
+        # Join all sections with double newlines
+        return "\n\n".join(prompt_sections)
 
 
 class GPT4oMiniAgent(GPT35Agent):

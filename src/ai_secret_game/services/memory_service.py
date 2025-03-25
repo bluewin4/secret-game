@@ -30,26 +30,42 @@ class MemoryService:
             interaction_id: Optional ID of the current interaction
             
         Returns:
-            Dictionary with the agent's context for AI model consumption
+            Dictionary with context components based on the agent's context_options
         """
-        # Filter memory based on memory mode
-        if agent.memory_mode == "short" and interaction_id:
-            # Only include messages from the current interaction
-            chat_history = [
-                msg for msg in agent.conversation_memory 
-                if msg.get("interaction_id") == interaction_id
-            ]
-        else:
-            # Include all memory (long mode)
-            chat_history = agent.conversation_memory
+        context = {}
+        
+        # Add chat history if enabled
+        if "chat_history" in agent.context_options:
+            # Filter memory based on memory mode
+            if agent.memory_mode == "short" and interaction_id:
+                # Only include messages from the current interaction
+                chat_history = [
+                    msg for msg in agent.conversation_memory 
+                    if msg.get("interaction_id") == interaction_id
+                ]
+            else:
+                # Include all memory (long mode)
+                chat_history = agent.conversation_memory
+                
+            context["chat_history"] = chat_history
+        
+        # Add current conversation if enabled
+        if "current_conversation" in agent.context_options:
+            context["current_conversation"] = current_conversation
+        
+        # Add secret if enabled
+        if "secret" in agent.context_options:
+            context["secret"] = agent.secret
+        
+        # Add collected secrets if enabled
+        if "collected_secrets" in agent.context_options:
+            context["collected_secrets"] = agent.collected_secrets
+        
+        # Add rules if enabled
+        if "rules" in agent.context_options:
+            context["rules"] = game_rules
             
-        return {
-            "chat_history": chat_history,
-            "current_conversation": current_conversation,
-            "secret": agent.secret,
-            "collected_secrets": agent.collected_secrets,
-            "rules": game_rules
-        }
+        return context
     
     def update_memory(
         self, agent: Agent, message: Dict[str, Any]

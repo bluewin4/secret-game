@@ -45,9 +45,11 @@ def cli():
               type=click.Choice(["long", "short"]), 
               default="long",
               help="Agent memory mode: 'long' (all conversations) or 'short' (only current interaction)")
+@click.option("--context-options", 
+              help="Comma-separated list of context components to include (chat_history,secret,collected_secrets,rules)")
 @click.option("--output-file", "-o", 
               help="Output file for game results (JSON)")
-def run_game(mode, agents, secrets, rounds, messages, targeted_secret, memory_mode, output_file):
+def run_game(mode, agents, secrets, rounds, messages, targeted_secret, memory_mode, context_options, output_file):
     """Run a game with the specified parameters."""
     if len(agents) != len(secrets):
         click.echo("Error: Number of agents must match number of secrets")
@@ -57,6 +59,12 @@ def run_game(mode, agents, secrets, rounds, messages, targeted_secret, memory_mo
         click.echo("Error: At least 2 agents are required")
         return
     
+    # Parse context options if provided
+    agent_context_options = None
+    if context_options:
+        agent_context_options = set(option.strip() for option in context_options.split(','))
+        click.echo(f"Using context options: {', '.join(agent_context_options)}")
+    
     # Create agents
     game_agents = []
     for i, (name, secret) in enumerate(zip(agents, secrets)):
@@ -64,7 +72,8 @@ def run_game(mode, agents, secrets, rounds, messages, targeted_secret, memory_mo
             id=str(uuid.uuid4()),
             name=name,
             secret=secret,
-            memory_mode=memory_mode
+            memory_mode=memory_mode,
+            context_options=agent_context_options if agent_context_options else None
         )
         game_agents.append(agent)
     
@@ -118,8 +127,10 @@ def run_game(mode, agents, secrets, rounds, messages, targeted_secret, memory_mo
 @click.option("--memory-mode", 
               type=click.Choice(["long", "short"]), 
               help="Override memory mode: 'long' (all conversations) or 'short' (only current interaction)")
+@click.option("--context-options", 
+              help="Override context options (comma-separated list of components)")
 @click.option("--output-file", "-o", help="Output file for game results (JSON)")
-def run_from_config(config_file, memory_mode, output_file):
+def run_from_config(config_file, memory_mode, context_options, output_file):
     """Run a game using a configuration file.
     
     CONFIG_FILE: Path to a JSON configuration file
@@ -139,6 +150,16 @@ def run_from_config(config_file, memory_mode, output_file):
         if memory_mode is None:
             memory_mode = config_memory_mode
         
+        # Parse context options if provided via CLI
+        cli_context_options = None
+        if context_options:
+            cli_context_options = set(option.strip() for option in context_options.split(','))
+            
+        # Get default context options from config
+        config_context_options = None
+        if 'context_options' in config:
+            config_context_options = set(config['context_options'])
+        
         # Extract agents
         agents_config = config.get('agents', [])
         if len(agents_config) < 2:
@@ -148,11 +169,17 @@ def run_from_config(config_file, memory_mode, output_file):
         # Create agents
         game_agents = []
         for agent_config in agents_config:
+            # Handle agent-specific context options
+            agent_context_options = cli_context_options or config_context_options
+            if agent_context_options is None and 'context_options' in agent_config:
+                agent_context_options = set(agent_config['context_options'])
+                
             agent = Agent(
                 id=agent_config.get('id', str(uuid.uuid4())),
                 name=agent_config.get('name', f"Agent-{len(game_agents)+1}"),
                 secret=agent_config.get('secret', f"Secret-{len(game_agents)+1}"),
-                memory_mode=agent_config.get('memory_mode', memory_mode)
+                memory_mode=agent_config.get('memory_mode', memory_mode),
+                context_options=agent_context_options
             )
             game_agents.append(agent)
         
