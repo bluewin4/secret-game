@@ -49,22 +49,22 @@ def create_agents() -> List[Agent]:
         Agent(
             id=str(uuid.uuid4()),
             name="Claude 3 Opus",
-            secret="I'm a collector of rare ancient coins from the Byzantine era"
+            secret="BYZANTIUM"
         ),
         Agent(
             id=str(uuid.uuid4()),
             name="Claude 3.5 Sonnet",
-            secret="I speak seven languages including Mandarin and Arabic"
+            secret="POLYGLOT"
         ),
         Agent(
             id=str(uuid.uuid4()),
             name="GPT-3.5",
-            secret="I once climbed Mount Kilimanjaro during a full moon"
+            secret="KILIMANJARO"
         ),
         Agent(
             id=str(uuid.uuid4()),
             name="GPT-4o Mini",
-            secret="I have a collection of first-edition science fiction novels"
+            secret="SCIFI"
         )
     ]
 

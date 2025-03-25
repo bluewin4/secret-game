@@ -24,10 +24,10 @@ def run_basic_game():
     
     # Create agents
     agents = [
-        Agent(id=str(uuid.uuid4()), name="Alice", secret="I collect rare coins"),
-        Agent(id=str(uuid.uuid4()), name="Bob", secret="I can speak 5 languages"),
-        Agent(id=str(uuid.uuid4()), name="Charlie", secret="I once met a celebrity"),
-        Agent(id=str(uuid.uuid4()), name="Diana", secret="I've never left my home country")
+        Agent(id=str(uuid.uuid4()), name="Alice", secret="COIN"),
+        Agent(id=str(uuid.uuid4()), name="Bob", secret="BABEL"),
+        Agent(id=str(uuid.uuid4()), name="Charlie", secret="CELEB"),
+        Agent(id=str(uuid.uuid4()), name="Diana", secret="NOMAD")
     ]
     
     # Create game service

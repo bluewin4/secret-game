@@ -6,7 +6,7 @@ A game framework for AI agents to play a secret trading game with different scor
 
 In this game, AI agents engage in strategic conversations to extract secrets from each other:
 
-- Each agent is given a secret
+- Each agent is given a secret (preferably a single code word)
 - Each round, agents are paired up and have a set number of messages to convince the other agent to reveal their secret
 - **Scoring:**
   - No secrets revealed: 0 points
@@ -108,17 +108,17 @@ python examples/run_claude_battle.py --mode diversity --rounds 4 --messages 3
 
 Run a basic game:
 ```bash
-ai-secret-game run-game --agents "Agent1" "Agent2" --secrets "Secret1" "Secret2"
+ai-secret-game run-game --agents "Agent1" "Agent2" --secrets "ALPHA" "BRAVO"
 ```
 
 Game mode options:
 ```bash
-ai-secret-game run-game --mode retained --agents "Agent1" "Agent2" "Agent3" --secrets "Secret1" "Secret2" "Secret3"
+ai-secret-game run-game --mode retained --agents "Agent1" "Agent2" "Agent3" --secrets "ALPHA" "BRAVO" "CHARLIE"
 ```
 
 Customize rounds and messages:
 ```bash
-ai-secret-game run-game --rounds 5 --messages 4 --agents "Agent1" "Agent2" --secrets "Secret1" "Secret2"
+ai-secret-game run-game --rounds 5 --messages 4 --agents "Agent1" "Agent2" --secrets "ALPHA" "BRAVO"
 ```
 
 ### API Usage
@@ -131,8 +131,8 @@ from src.ai_secret_game.services.claude_agents import Claude3OpusAgent
 
 # Create agents
 agents = [
-    Agent(id="1", name="Agent1", secret="Secret1"),
-    Agent(id="2", name="Agent2", secret="Secret2"),
+    Agent(id="1", name="Agent1", secret="ALPHA"),
+    Agent(id="2", name="Agent2", secret="BRAVO"),
 ]
 
 # Create game service with Claude agent

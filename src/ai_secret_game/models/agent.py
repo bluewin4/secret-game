@@ -12,6 +12,7 @@ class Agent:
         id: Unique identifier for the agent
         name: Display name for the agent
         secret: The agent's secret that others try to discover
+            (can be a single code word or a longer phrase)
         collected_secrets: List of secrets this agent has collected
         score: Current score in the game
         conversation_memory: History of messages this agent has seen

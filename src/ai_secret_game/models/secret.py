@@ -9,7 +9,7 @@ class Secret:
     
     Attributes:
         id: Unique identifier for the secret
-        content: The actual secret content
+        content: The actual secret content (preferably a single code word)
         owner_id: ID of the agent who originally owns this secret
         rarity: Rarity factor used in RETAINED mode for scoring
         is_targeted: Whether this is a targeted secret in TARGETED mode
