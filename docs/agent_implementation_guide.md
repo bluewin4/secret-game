@@ -34,10 +34,19 @@ class BaseModelAgent(AgentService):
     def __init__(self, model_name: str):
         """Initialize the agent with a model name."""
         self.model_name = model_name
-        self.memory_service = MemoryService()
+        logger.debug(f"Initialized {self.__class__.__name__} with model {model_name}")
 
     def _create_system_prompt(self, context: Dict[str, Any]) -> str:
-        """Create a system prompt based on game context."""
+        """Create a system prompt based on game context.
+        
+        The prompt includes:
+        1. Introduction and role
+        2. Agent's secret (if provided)
+        3. Game rules and scoring information
+        4. Turns remaining
+        5. Message format instructions
+        6. Collected secrets (if any)
+        """
         pass
 
     @abstractmethod
@@ -136,7 +145,7 @@ class CustomAgent(BaseModelAgent):
             # Initialize your client
             client = custom_ai_client.Client(api_key=self.api_key)
             
-            # Create system prompt
+            # Create system prompt using the base class method
             system_prompt = self._create_system_prompt(context)
             
             # Format messages for your service
@@ -174,6 +183,7 @@ class CustomAgent(BaseModelAgent):
    - Always inherit from `BaseModelAgent` for AI model-based agents
    - Implement only the necessary methods
    - Use `super()` calls appropriately
+   - Let the base class handle prompt construction
 
 2. **Error Handling**
    - Catch and log all exceptions
@@ -195,7 +205,7 @@ class CustomAgent(BaseModelAgent):
 
 5. **Prompt Construction**
    - Use the base class's `_create_system_prompt` method
-   - Include all relevant context information
+   - The base class handles all standard prompt sections
    - Format messages according to your AI service's requirements
    - Follow the prompt engineering tips in [Agent Interface](agent_interface.md#prompt-engineering-tips)
 
@@ -248,36 +258,55 @@ def test_custom_agent_message_generation(mock_client):
 
 ## Integration
 
-To use your custom agent:
+To use your custom agent with the game:
 
-1. Place your agent class in a new file in `src/ai_secret_game/services/`
-2. Import and register your agent in the appropriate factory or configuration
-3. Update any necessary configuration files
-4. Add your agent to the test suite
-5. Test your API integration using the methods described in [API Setup](api_setup.md#testing-your-api-keys)
+```python
+from ai_secret_game.models.agent import Agent
+from ai_secret_game.models.game import Game, GameMode
+from ai_secret_game.services.game_service import GameService
+from custom_agents import CustomAgent
+
+# Create agents
+agents = [
+    Agent(id="1", name="Agent1", secret="Secret1"),
+    Agent(id="2", name="Agent2", secret="Secret2"),
+]
+
+# Create your custom agent service
+custom_service = CustomAgent()
+
+# Create game service with your agent service
+game_service = GameService(agent_service=custom_service)
+
+# Create and run a game
+game = game_service.create_game(
+    agents=agents,
+    mode=GameMode.STANDARD,
+    max_rounds=3,
+    messages_per_round=2
+)
+
+results = game_service.run_game(game)
+```
 
 ## Common Pitfalls
 
 1. **Memory Management**
-   - Don't bypass the `MemoryService`
-   - Handle both short and long memory modes
-   - Properly format conversation history
-   - See [Agent Interface](agent_interface.md#memory-modes) for details
+   - Don't modify the agent's memory directly
+   - Use the provided memory service methods
+   - Handle conversation history properly
 
 2. **Error Handling**
-   - Don't swallow exceptions
+   - Always catch and log exceptions
    - Provide meaningful error messages
-   - Include error context in logs
-   - See [API Setup](api_setup.md#troubleshooting) for common issues
+   - Return graceful fallback responses
 
 3. **Context Building**
-   - Include all required context fields
-   - Handle optional fields appropriately
-   - Format data according to your AI service's requirements
-   - See [Agent Interface](agent_interface.md#context-format) for the full context structure
+   - Don't modify the context dictionary
+   - Use the provided context options
+   - Include all necessary information
 
 4. **API Integration**
-   - Handle API key management properly
-   - Implement proper rate limiting
-   - Handle API-specific error cases
-   - See [API Setup](api_setup.md#api-usage-costs) for cost considerations 
+   - Handle API errors gracefully
+   - Use proper authentication
+   - Follow rate limits and quotas 

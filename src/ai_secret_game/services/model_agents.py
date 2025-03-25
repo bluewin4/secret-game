@@ -1,10 +1,12 @@
 """Base interface for model-based agents in the AI Secret Trading Game."""
 
+import os
 import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 
 from .agent_service import AgentService
+from ..utils.errors import AgentError
 
 logger = logging.getLogger(__name__)
 
@@ -249,10 +251,8 @@ class GPT35Agent(BaseModelAgent):
         Args:
             api_key: API key for OpenAI
         """
-        super().__init__(
-            api_key=api_key or os.getenv("OPENAI_API_KEY"),
-            model_name="gpt-3.5-turbo"
-        )
+        super().__init__(model_name="gpt-3.5-turbo")
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             logger.warning("No OPENAI_API_KEY found in environment variables")
         logger.debug(f"Initialized GPT-3.5 agent with model {self.model_name}")

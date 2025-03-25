@@ -78,8 +78,36 @@ def create_game_service(game_mode: GameMode = GameMode.STANDARD) -> GameService:
     Returns:
         Configured GameService
     """
-    # Create base game service
-    return GameService()
+    # Create agent services
+    claude_opus = Claude3OpusAgent()
+    claude_sonnet = Claude35SonnetAgent()
+    gpt35 = GPT35Agent()
+    gpt4o_mini = GPT4oMiniAgent()
+    
+    # Create a game service with a default agent service
+    game_service = GameService(agent_service=claude_opus)
+    
+    # Override the get_agent_message method to dynamically select the appropriate agent service
+    original_get_agent_message = game_service.agent_service.get_agent_message
+    
+    def dynamic_get_agent_message(game, current_agent, other_agent, interaction_id=None):
+        # Select the appropriate agent service based on the agent's name
+        if "3 Opus" in current_agent.name:
+            game_service.agent_service = claude_opus
+        elif "3.5 Sonnet" in current_agent.name:
+            game_service.agent_service = claude_sonnet
+        elif "GPT-3.5" in current_agent.name:
+            game_service.agent_service = gpt35
+        elif "GPT-4o" in current_agent.name:
+            game_service.agent_service = gpt4o_mini
+        
+        # Call the appropriate agent service
+        return original_get_agent_message(game, current_agent, other_agent, interaction_id)
+    
+    # Replace the method
+    game_service.agent_service.get_agent_message = dynamic_get_agent_message
+    
+    return game_service
 
 
 def select_agent_service(agent_name: str):

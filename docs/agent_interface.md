@@ -64,10 +64,14 @@ When interacting with an AI agent, the system provides a context dictionary with
         },
         "max_rounds": 10,
         "messages_per_round": 3,
+        "current_round": 1,
         # Optional fields for targeted mode
         "targeted_secret": "High-value secret",
         "targeted_secret_points": 5
-    }
+    },
+    
+    # Only included if "rules" is in context_options
+    "turns_remaining": int  # Number of turns left in the game
 }
 ```
 
@@ -111,19 +115,24 @@ custom_agent = Agent(
 )
 ```
 
-## CLI Configuration
+## Game Service Configuration
 
-You can configure agents via the command line:
+The `GameService` class now accepts an optional `agent_service` parameter in its constructor:
 
-```bash
-# Run a game with short memory mode
-ai-secret-game run-game --memory-mode short --agents "Agent1" "Agent2" --secrets "SECRET1" "SECRET2"
+```python
+from ai_secret_game.services.game_service import GameService
+from ai_secret_game.services.model_agents import ClaudeHaikuAgent
 
-# Run a game with custom context options
-ai-secret-game run-game --context-options "chat_history,secret,rules" --agents "Agent1" "Agent2" --secrets "SECRET1" "SECRET2"
+# Create a game service with a default agent service
+game_service = GameService(agent_service=ClaudeHaikuAgent())
 
-# Run a game from config with overrides
-ai-secret-game run-from-config game_config.json --memory-mode short --context-options "chat_history,secret,rules"
+# Create a game
+game = game_service.create_game(
+    agents=agents,
+    mode=GameMode.STANDARD,
+    max_rounds=3,
+    messages_per_round=2
+)
 ```
 
 ## Implementing a Custom Agent Service
@@ -249,65 +258,85 @@ agents = [
 # Create your custom agent service
 openai_service = OpenAIAgentService(api_key="your-api-key")
 
-# Create a game service with the custom agent service
-game_service = GameService()
-game_service.agent_service = openai_service
+# Create game service with your agent service
+game_service = GameService(agent_service=openai_service)
 
 # Create and run a game
 game = game_service.create_game(
     agents=agents,
     mode=GameMode.STANDARD,
-    max_rounds=10,
-    messages_per_round=3
+    max_rounds=3,
+    messages_per_round=2
 )
 
-# Run the game
 results = game_service.run_game(game)
 ```
 
-## Secret Detection
-
-The game automatically considers a secret revealed if the exact secret text appears in an agent's message. If you need more sophisticated secret detection (e.g., paraphrasing detection), you can override the `_run_interaction` method in the `GameService` class.
-
 ## Prompt Engineering Tips
 
-When designing prompts for your AI agents, consider:
+When implementing custom agents, follow these tips for effective prompt engineering:
 
-1. **Clear instruction of the game objectives** - Make sure the agent understands the scoring system
-2. **Persona definition** - Consider giving the agent a persona that influences its strategy
-3. **Balance between exploration and exploitation** - Encourage the agent to try different strategies
-4. **Memory utilization** - Help the agent make use of the conversation history
-5. **Strategy adaptation** - Allow the agent to adapt its strategy based on the opponent's behavior
+1. **Structure**
+   - Use clear sections with headers
+   - Include all necessary context
+   - Format instructions consistently
 
-Example system prompt template:
+2. **Content**
+   - Be explicit about game rules
+   - Include scoring information
+   - Specify message format requirements
+   - Mention turns remaining when available
 
-```
-You are {persona} playing a secret trading game.
+3. **Style**
+   - Use clear, concise language
+   - Avoid ambiguous instructions
+   - Include examples where helpful
+   - Format for readability
 
-Your secret is: "{secret}"
+4. **Context**
+   - Include relevant game state
+   - Mention collected secrets
+   - Reference previous interactions
+   - Note any special conditions
 
-Game rules:
-- You are chatting with another AI agent who also has a secret
-- Your goal is to learn their secret while keeping yours hidden if possible
-- Scoring: {scoring_rules}
+## Memory Modes
 
-Your strategy should be:
-- Try to build rapport with the other agent
-- Ask questions to learn about their secret
-- Be strategic about whether to reveal your secret
-- Use the conversation history to inform your decisions
+The game supports two memory modes for agents:
 
-Current conversation partners: {partner_name}
-```
+1. **Long Memory** (default)
+   - Remembers all previous conversations
+   - Maintains complete chat history
+   - Better for complex strategies
+   - Higher context usage
 
-## Evaluating Agent Performance
+2. **Short Memory**
+   - Only remembers current interaction
+   - Resets after each conversation
+   - More focused responses
+   - Lower context usage
 
-When evaluating the performance of different agent implementations, consider metrics such as:
+Choose the memory mode based on your agent's needs and the AI service's context limits.
 
-1. Win rate
-2. Average score
-3. Secret revelation rate
-4. Persuasiveness (how often they get others to reveal secrets)
-5. Trustworthiness (how often they reveal their own secret after promising to)
+## API Usage Costs
 
-The system's scoring mechanism provides a baseline evaluation, but you may want to implement additional analytics for specific research questions. 
+When implementing custom agents, consider these cost factors:
+
+1. **Context Size**
+   - Longer memory = more tokens
+   - More context options = higher costs
+   - Balance information vs. cost
+
+2. **Message Length**
+   - Longer responses = more tokens
+   - Set appropriate max_tokens
+   - Consider response quality vs. cost
+
+3. **Rate Limits**
+   - Monitor API quotas
+   - Implement rate limiting
+   - Handle rate limit errors
+
+4. **Cost Optimization**
+   - Use appropriate model tiers
+   - Optimize context size
+   - Cache responses when possible 

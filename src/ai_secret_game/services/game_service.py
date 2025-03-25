@@ -22,10 +22,14 @@ class GameService:
     and managing agent interactions.
     """
     
-    def __init__(self):
-        """Initialize the game service."""
+    def __init__(self, agent_service: Optional[AgentService] = None):
+        """Initialize the game service.
+        
+        Args:
+            agent_service: Optional agent service to use. If not provided, one must be set before running games.
+        """
         self.scoring_service = ScoringService()
-        self.agent_service = AgentService()
+        self.agent_service = agent_service
     
     def create_game(
         self, 

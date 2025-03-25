@@ -5,6 +5,7 @@ import uuid
 import logging
 import sys
 import os
+from dotenv import load_dotenv
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -12,10 +13,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src.ai_secret_game.models.agent import Agent
 from src.ai_secret_game.models.game import Game, GameMode
 from src.ai_secret_game.services.game_service import GameService
+from src.ai_secret_game.services.model_agents import ClaudeHaikuAgent
 
 
 def run_basic_game():
     """Run a basic example game with placeholder agents."""
+    # Load environment variables
+    load_dotenv()
+    
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
@@ -30,8 +35,8 @@ def run_basic_game():
         Agent(id=str(uuid.uuid4()), name="Diana", secret="NOMAD")
     ]
     
-    # Create game service
-    game_service = GameService()
+    # Create game service with a default agent service
+    game_service = GameService(agent_service=ClaudeHaikuAgent())
     
     # Create a standard game
     game = game_service.create_game(

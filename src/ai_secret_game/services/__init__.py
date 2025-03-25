@@ -17,6 +17,5 @@ from .aggressive_agents import (
     AggressiveGPT4oMiniAgent,
     AggressiveClaudeAgent,
     AggressiveClaudeHaikuAgent,
-    AggressiveClaudeSonnetAgent,
-    AggressiveClaude35SonnetAgent
+    AggressiveClaudeSonnetAgent
 ) 
