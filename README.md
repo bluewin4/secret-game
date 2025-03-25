@@ -192,4 +192,3 @@ Detailed documentation is available in the `docs/` directory:
 - [Agent Interface](docs/agent_interface.md)
 - [API Setup Guide](docs/api_setup.md)
 
-# secret-game

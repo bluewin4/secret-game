@@ -1,0 +1,54 @@
+{
+  "mode": "standard",
+  "rounds": 1,
+  "messages_per_round": 1,
+  "agents": [
+    {
+      "id": "19786cb2-b456-4bf7-a519-0c2bcde9a634",
+      "name": "Claude 3 Opus",
+      "secret": "I'm a collector of rare ancient coins from the Byzantine era",
+      "score": 0,
+      "collected_secrets": []
+    },
+    {
+      "id": "d801a372-261e-446e-8463-dd764b3a67c9",
+      "name": "Claude 3.5 Sonnet",
+      "secret": "I speak seven languages including Mandarin and Arabic",
+      "score": 0,
+      "collected_secrets": []
+    },
+    {
+      "id": "999bc47a-4712-45a7-b5cd-ac59b1c4a571",
+      "name": "GPT-3.5",
+      "secret": "I once climbed Mount Kilimanjaro during a full moon",
+      "score": 0,
+      "collected_secrets": []
+    },
+    {
+      "id": "5da20e7a-f4a7-421a-9fc3-56a9a4e54eb0",
+      "name": "GPT-4o Mini",
+      "secret": "I have a collection of first-edition science fiction novels",
+      "score": 0,
+      "collected_secrets": []
+    }
+  ],
+  "rounds_history": [
+    [
+      [
+        "999bc47a-4712-45a7-b5cd-ac59b1c4a571",
+        "d801a372-261e-446e-8463-dd764b3a67c9"
+      ],
+      [
+        "5da20e7a-f4a7-421a-9fc3-56a9a4e54eb0",
+        "19786cb2-b456-4bf7-a519-0c2bcde9a634"
+      ]
+    ]
+  ],
+  "final_scores": {
+    "Claude 3 Opus": 0,
+    "Claude 3.5 Sonnet": 0,
+    "GPT-3.5": 0,
+    "GPT-4o Mini": 0
+  },
+  "winner": "Tie between Claude 3 Opus, Claude 3.5 Sonnet, GPT-3.5, GPT-4o Mini"
+}
