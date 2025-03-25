@@ -53,6 +53,7 @@ class Game:
             "mode": self.mode.value,
             "scoring": self._get_scoring_rules(),
             "max_rounds": self.max_rounds,
+            "current_round": self.round,
             "messages_per_round": self.messages_per_round,
         }
         

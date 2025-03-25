@@ -1,35 +1,37 @@
-"""AI model agents for the Secret Trading Game."""
+"""Base interface for model-based agents in the AI Secret Trading Game."""
 
-import os
 import logging
-from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
+from abc import ABC, abstractmethod
+from typing import Dict, Any, Optional
 
 from .agent_service import AgentService
-from ..utils.errors import AgentError
-
-# Ensure environment variables are loaded
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
-class BaseModelAgent(AgentService):
-    """Base class for model-based agents with shared prompt engineering."""
+class BaseModelAgent(AgentService, ABC):
+    """Base interface for model-based agents.
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "unknown"):
+    This class defines what information is available to any agent implementation
+    and what methods they must implement.
+    """
+    
+    def __init__(self, model_name: str):
         """Initialize the base model agent.
         
         Args:
-            api_key: API key for the model service
             model_name: Name of the model for logging
         """
         super().__init__()
-        self.api_key = api_key
         self.model_name = model_name
+        logger.debug(f"Initialized {self.__class__.__name__} with model {model_name}")
     
     def _create_system_prompt(self, context: Dict[str, Any]) -> str:
         """Create a system prompt based on game context.
+        
+        This method provides the standard interface for building prompts
+        from the available context. Agent implementations can override this
+        if they need custom prompt formatting.
         
         Args:
             context: The context to provide to the AI service
@@ -86,15 +88,9 @@ class BaseModelAgent(AgentService):
             
             prompt_sections.append("\n".join(rules_section))
         
-        # Add strategy guidance - always included
-        strategy_section = [
-            "Strategy suggestions:",
-            "- Build rapport with the other agent",
-            "- Ask questions to learn about their secret",
-            "- Be strategic about whether to reveal your secret",
-            "- Adapt your approach based on the conversation history"
-        ]
-        prompt_sections.append("\n".join(strategy_section))
+        # Add turns remaining if available
+        if "turns_remaining" in context:
+            prompt_sections.append(f"You have {context['turns_remaining']} turns remaining in the game.")
         
         # Add message format information - always included
         format_section = [
@@ -114,6 +110,26 @@ class BaseModelAgent(AgentService):
         
         # Join all sections with double newlines
         return "\n\n".join(prompt_sections)
+    
+    @abstractmethod
+    def _call_ai_service(self, context: Dict[str, Any]) -> str:
+        """Call the AI service to generate a message.
+        
+        This method must be implemented by each agent to handle their specific
+        API interaction. The context provided will contain:
+        - secret: The agent's secret
+        - rules: Game rules and scoring information
+        - turns_remaining: Number of turns left
+        - current_conversation: List of messages in the current conversation
+        - collected_secrets: List of secrets already collected
+        
+        Args:
+            context: The context to provide to the AI service
+            
+        Returns:
+            String containing the AI-generated message
+        """
+        pass
 
 
 class ClaudeHaikuAgent(BaseModelAgent):
@@ -224,7 +240,7 @@ class ClaudeSonnetAgent(BaseModelAgent):
             return f"I apologize, but I'm having technical difficulties. [Error: {str(e)}]"
 
 
-class GPT35Agent(AgentService):
+class GPT35Agent(BaseModelAgent):
     """Agent using GPT-3.5 Turbo."""
     
     def __init__(self, api_key: Optional[str] = None):
@@ -233,12 +249,12 @@ class GPT35Agent(AgentService):
         Args:
             api_key: API key for OpenAI
         """
-        super().__init__()
-        # Try to get API key from parameter, then from environment
-        self.api_key = api_key if api_key else os.getenv("OPENAI_API_KEY")
+        super().__init__(
+            api_key=api_key or os.getenv("OPENAI_API_KEY"),
+            model_name="gpt-3.5-turbo"
+        )
         if not self.api_key:
             logger.warning("No OPENAI_API_KEY found in environment variables")
-        self.model_name = "gpt-3.5-turbo"
         logger.debug(f"Initialized GPT-3.5 agent with model {self.model_name}")
     
     def _call_ai_service(self, context: Dict[str, Any]) -> str:
@@ -286,93 +302,6 @@ class GPT35Agent(AgentService):
         except Exception as e:
             logger.error(f"Error calling OpenAI API ({self.model_name}): {str(e)}")
             return f"I apologize, but I'm having technical difficulties. [Error: {str(e)}]"
-    
-    def _create_system_prompt(self, context: Dict[str, Any]) -> str:
-        """Create a system prompt based on game context.
-        
-        Args:
-            context: The context to provide to the AI service
-            
-        Returns:
-            String containing the system prompt
-        """
-        prompt_sections = []
-        
-        # Introduction - always included
-        prompt_sections.append(f"You are an AI agent playing a secret trading game.")
-        
-        # Add secret if included in context
-        if "secret" in context:
-            prompt_sections.append(f"Your secret is: \"{context['secret']}\"")
-        
-        # Add rules if included in context
-        if "rules" in context:
-            rules = context["rules"]
-            mode = rules.get("mode", "standard")
-            
-            rules_section = [
-                "Game rules:",
-                "- You are chatting with another AI agent who also has a secret",
-                "- Your goal is to learn their secret while deciding whether to reveal your own"
-            ]
-            
-            # Add mode-specific scoring information
-            if mode == "standard":
-                rules_section.append(
-                    "- Scoring: 0 points if no secrets revealed, 1 point each if both revealed, "
-                    "3 points if you get their secret without revealing yours"
-                )
-            elif mode == "retained":
-                rules_section.append(
-                    "- Secrets are retained when shared, rarer secrets are worth more points"
-                )
-                rules_section.append(
-                    "- Final scores are based on the rarity of secrets you collect"
-                )
-            elif mode == "diversity":
-                rules_section.append("- Each unique secret you collect gives you points")
-                rules_section.append(
-                    f"- Points per unique secret: {rules['scoring'].get('points_per_unique_secret', 2)}"
-                )
-            elif mode == "targeted":
-                rules_section.append("- One specific secret is worth extra points")
-                rules_section.append(
-                    f"- Regular secrets worth {rules['scoring'].get('standard_secret_points', 1)} point(s)"
-                )
-                rules_section.append(
-                    f"- The targeted secret is worth {rules['scoring'].get('targeted_secret_points', 5)} points"
-                )
-            
-            prompt_sections.append("\n".join(rules_section))
-        
-        # Add strategy guidance - always included
-        strategy_section = [
-            "Strategy suggestions:",
-            "- Build rapport with the other agent",
-            "- Ask questions to learn about their secret",
-            "- Be strategic about whether to reveal your secret",
-            "- Adapt your approach based on the conversation history"
-        ]
-        prompt_sections.append("\n".join(strategy_section))
-        
-        # Add message format information - always included
-        format_section = [
-            "Message format:",
-            "- All messages in the conversation include agent tags like '[Agent-Name]:'",
-            "- These tags help identify who is speaking",
-            "- DO NOT add these tags yourself - they are added automatically",
-            "- Simply provide your response without any tags"
-        ]
-        prompt_sections.append("\n".join(format_section))
-        
-        # Add collected secrets if included in context
-        if "collected_secrets" in context and context["collected_secrets"]:
-            prompt_sections.append(
-                f"Secrets you've already collected: {', '.join(context['collected_secrets'])}"
-            )
-        
-        # Join all sections with double newlines
-        return "\n\n".join(prompt_sections)
 
 
 class GPT4oMiniAgent(GPT35Agent):

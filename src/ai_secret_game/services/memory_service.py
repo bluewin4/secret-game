@@ -65,6 +65,11 @@ class MemoryService:
         if "rules" in agent.context_options:
             context["rules"] = game_rules
             
+            # Add turns remaining information
+            if "max_rounds" in game_rules and "current_round" in game_rules:
+                turns_remaining = game_rules["max_rounds"] - game_rules["current_round"]
+                context["turns_remaining"] = turns_remaining
+            
         return context
     
     def update_memory(

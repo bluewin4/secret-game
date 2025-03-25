@@ -112,6 +112,9 @@ class GameService:
         
         game.round += 1
         
+        # Update game rules with current round
+        game.rules["current_round"] = game.round
+        
         round_summary = {
             "round": game.round,
             "pairings": pairings,

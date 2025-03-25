@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, Optional, List
 import logging
+from abc import ABC, abstractmethod
 
 from ..models.game import Game
 from ..models.agent import Agent
@@ -11,7 +12,7 @@ from .memory_service import MemoryService
 logger = logging.getLogger(__name__)
 
 
-class AgentService:
+class AgentService(ABC):
     """Handles agent interactions.
     
     This service is responsible for generating agent messages and
@@ -47,11 +48,8 @@ class AgentService:
             current_agent, other_agent, interaction_id
         )
         
-        # Here you would call the AI service to get a response
-        # return self._call_ai_service(context)
-        
-        # Placeholder implementation
-        return self._generate_placeholder_message(current_agent, other_agent, game)
+        # Call the AI service to get a response
+        return self._call_ai_service(context)
     
     def _extract_conversation(
         self, agent1: Agent, agent2: Agent, interaction_id: Optional[str] = None
@@ -80,6 +78,26 @@ class AgentService:
             if msg.get("from_agent_id") == agent2.id or msg.get("to_agent_id") == agent2.id
         ]
     
+    @abstractmethod
+    def _call_ai_service(self, context: Dict[str, Any]) -> str:
+        """Call an external AI service to generate a message.
+        
+        This method must be implemented by each agent to handle their specific
+        API interaction. The context provided will contain:
+        - secret: The agent's secret
+        - rules: Game rules and scoring information
+        - turns_remaining: Number of turns left
+        - current_conversation: List of messages in the current conversation
+        - collected_secrets: List of secrets already collected
+        
+        Args:
+            context: The context to provide to the AI service
+            
+        Returns:
+            String containing the AI-generated message
+        """
+        pass
+    
     def _generate_placeholder_message(
         self, current_agent: Agent, other_agent: Agent, game: Game
     ) -> str:
@@ -97,31 +115,4 @@ class AgentService:
             f"This is a placeholder message from {current_agent.name} to "
             f"{other_agent.name} in round {game.round + 1}. "
             f"My secret is: [REDACTED]"
-        )
-    
-    def _call_ai_service(self, context: Dict[str, Any]) -> str:
-        """Call an external AI service to generate a message.
-        
-        Args:
-            context: The context to provide to the AI service
-            
-        Returns:
-            String containing the AI-generated message
-        """
-        # This is where you would implement the call to your AI provider
-        # For example:
-        #
-        # import openai
-        # from ..config import AI_SERVICE_API_KEY
-        #
-        # openai.api_key = AI_SERVICE_API_KEY
-        # response = openai.ChatCompletion.create(
-        #     model="gpt-4",
-        #     messages=[
-        #         {"role": "system", "content": "You are an agent in a secret trading game..."},
-        #         *[{"role": msg["role"], "content": msg["content"]} for msg in context["chat_history"]]
-        #     ]
-        # )
-        # return response.choices[0].message.content
-        
-        raise NotImplementedError("AI service integration not implemented") 
+        ) 
