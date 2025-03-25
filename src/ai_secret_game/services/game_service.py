@@ -203,6 +203,28 @@ class GameService:
             "agent2_revealed_secret": False
         }
         
+        # Initialize with empty conversation history for this interaction
+        # This ensures agents see the correct conversation when generating first message
+        agent1.add_to_memory({
+            "role": "system",
+            "content": f"Beginning conversation with {agent2.name}",
+            "from_agent_id": "system",
+            "from_agent_name": "System",
+            "to_agent_id": agent1.id,
+            "to_agent_name": agent1.name,
+            "interaction_id": interaction_id
+        })
+        
+        agent2.add_to_memory({
+            "role": "system",
+            "content": f"Beginning conversation with {agent1.name}",
+            "from_agent_id": "system",
+            "from_agent_name": "System",
+            "to_agent_id": agent2.id,
+            "to_agent_name": agent2.name,
+            "interaction_id": interaction_id
+        })
+        
         # Alternate messages between agents
         for i in range(messages_per_round * 2):
             current_agent = agent1 if i % 2 == 0 else agent2
