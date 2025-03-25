@@ -98,6 +98,11 @@ python examples/batch_statistical_analysis.py \
   --messages-per-interaction 5
 ```
 
+Or use the helper script:
+```bash
+./run_batch_analysis.sh --batch-service openai --interactions 100 --messages 5
+```
+
 #### Batch Services
 
 The system provides three batch service implementations:
@@ -107,6 +112,30 @@ The system provides three batch service implementations:
 - **Anthropic Batch Service**: Uses Anthropic's Message Batches API for 50% cost reduction
 
 For detailed information on batch processing, see the [Batch Processing Guide](docs/batch_processing.md).
+
+### Model Comparison Experiments
+
+The framework includes tools for running standardized model comparison experiments to evaluate different AI models' performance using identical prompts.
+
+#### Running Model Comparison
+
+To run a model comparison experiment with default settings:
+```bash
+./run_model_comparison.sh
+```
+
+Customize your experiment:
+```bash
+./run_model_comparison.sh \
+  --batch-service [default|openai|anthropic] \
+  --game-mode [standard|retained|diversity|targeted] \
+  --interactions 50 \
+  --messages 5
+```
+
+The experiment compares GPT-3.5, GPT-4o Mini, Claude 3 Opus, and Claude 3.5 Sonnet using a standardized prompt across all models. Results are saved in a structured format for later analysis.
+
+For detailed information on model comparison experiments, see the [Model Comparison Guide](docs/model_comparison.md).
 
 ### Agent Configuration
 
