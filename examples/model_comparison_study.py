@@ -17,28 +17,23 @@ from datetime import datetime
 from typing import Dict, Any, List
 from pathlib import Path
 from dotenv import load_dotenv
+import itertools
+import random
 
 # Add parent directory to path to allow importing the package
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(str(Path(__file__).parent.parent))
 
 # Load environment variables from .env file
 load_dotenv()
 
-from src.ai_secret_game.models.agent import Agent
-from src.ai_secret_game.models.game import Game, GameMode
-from src.ai_secret_game.services.game_service import GameService
-from src.ai_secret_game.services.batch_service import BatchService
-from src.ai_secret_game.services.openai_batch_service import OpenAIBatchService
-from src.ai_secret_game.services.anthropic_batch_service import AnthropicBatchService
-from src.ai_secret_game.services.model_agents import (
-    BaseModelAgent, 
-    GPT35Agent, 
-    GPT4oMiniAgent
-)
-from src.ai_secret_game.services.claude_agents import (
-    Claude3OpusAgent, 
-    Claude35SonnetAgent
-)
+from ai_secret_game.services.game_service import GameService
+from ai_secret_game.services.batch_service import BatchService
+from ai_secret_game.services.openai_batch_service import OpenAIBatchService
+from ai_secret_game.services.anthropic_batch_service import AnthropicBatchService
+from ai_secret_game.services.openai_conversation_batch_service import OpenAIConversationBatchService
+from ai_secret_game.services.anthropic_conversation_batch_service import AnthropicConversationBatchService
+from ai_secret_game.services.gpt_agents import GPT35Agent, GPT4oMiniAgent
+from ai_secret_game.services.claude_agents import Claude3OpusAgent, Claude35SonnetAgent
 
 
 # Define standardized system prompt
@@ -177,28 +172,16 @@ class StandardizedClaude35SonnetAgent(Claude35SonnetAgent):
         return prompt
 
 
-def create_agents(secrets: Dict[str, str]) -> List[Agent]:
-    """Create agents with specified secrets.
+def create_agents(secrets: Dict[str, str]) -> List:
+    """This function is no longer used but kept for backward compatibility.
     
     Args:
-        secrets: Dictionary mapping model names to their assigned secrets
+        secrets: Dictionary of model names to their secrets
         
     Returns:
-        List of Agent objects
+        Empty list
     """
-    agents = []
-    
-    for model_name, secret in secrets.items():
-        agent = Agent(
-            id=str(uuid.uuid4()),
-            name=model_name,
-            secret=secret,
-            # Use short memory mode to ensure fair comparison
-            memory_mode="short"
-        )
-        agents.append(agent)
-    
-    return agents
+    return []
 
 
 def create_game_service(model_name: str) -> GameService:
@@ -226,376 +209,418 @@ def create_game_service(model_name: str) -> GameService:
     return GameService(agent_service=agent_service)
 
 
-def create_batch_service(
-    batch_service_type: str, game_service: GameService, batch_size: int
-) -> BatchService:
-    """Create a batch service of the specified type.
+def create_batch_service(agent_service, batch_service_type="auto", output_dir="results/batch_jobs", max_concurrent_tasks=10, batch_size=50):
+    """Create a batch service based on the type.
     
     Args:
-        batch_service_type: Type of batch service to use
-        game_service: GameService instance to use
+        agent_service: Agent service to use for the batch service
+        batch_service_type: Type of batch service to create (default, openai, anthropic, openai-conversation, anthropic-conversation, auto)
+        output_dir: Directory where results will be saved
+        max_concurrent_tasks: Maximum number of concurrent tasks to process
         batch_size: Number of tasks to include in each batch
         
     Returns:
-        Configured BatchService
+        BatchService instance
     """
-    if batch_service_type == "openai":
+    # Auto-detect the best batch service based on the agent service
+    if batch_service_type == "auto":
+        # Check if agent_service has model_name attribute which we can use to determine provider
+        model_name = getattr(agent_service, "model_name", "")
+        
+        if "gpt" in model_name.lower() or "openai" in model_name.lower():
+            # Use conversation batching for OpenAI
+            batch_service_type = "openai-conversation"
+        elif "claude" in model_name.lower() or "anthropic" in model_name.lower():
+            # Use conversation batching for Anthropic
+            batch_service_type = "anthropic-conversation"
+        else:
+            # Default to standard batch service
+            batch_service_type = "default"
+            
+        logging.info(f"Auto-detected batch service type: {batch_service_type} for model: {model_name}")
+    
+    # Create the batch service based on the selected type
+    if batch_service_type == "default":
+        return BatchService(
+            game_service=GameService(agent_service), 
+            output_dir=output_dir
+        )
+    
+    elif batch_service_type == "openai":
         return OpenAIBatchService(
-            game_service=game_service,
-            api_key=os.getenv("OPENAI_API_KEY"),
+            game_service=GameService(agent_service), 
+            output_dir=output_dir,
+            max_concurrent_tasks=max_concurrent_tasks,
             batch_size=batch_size
         )
+    
     elif batch_service_type == "anthropic":
         return AnthropicBatchService(
-            game_service=game_service,
-            api_key=os.getenv("ANTHROPIC_API_KEY"),
+            game_service=GameService(agent_service), 
+            output_dir=output_dir,
+            max_concurrent_tasks=max_concurrent_tasks,
             batch_size=batch_size
         )
+    
+    elif batch_service_type == "openai-conversation":
+        return OpenAIConversationBatchService(
+            game_service=GameService(agent_service), 
+            output_dir=output_dir,
+            max_concurrent_tasks=max_concurrent_tasks,
+            batch_size=batch_size
+        )
+    
+    elif batch_service_type == "anthropic-conversation":
+        return AnthropicConversationBatchService(
+            game_service=GameService(agent_service), 
+            output_dir=output_dir,
+            max_concurrent_tasks=max_concurrent_tasks,
+            batch_size=batch_size
+        )
+    
     else:
-        return BatchService(
-            game_service=game_service,
-            batch_size=batch_size
-        )
+        raise ValueError(f"Unsupported batch service type: {batch_service_type}")
 
 
-async def run_model_comparison(
-    config: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Run a standardized model comparison experiment.
+def run_model_comparison(config):
+    """Run the model comparison experiment with the given configuration.
     
     Args:
         config: Experiment configuration
-        
-    Returns:
-        Dictionary containing the experiment results
     """
-    # Get configuration parameters
-    batch_service_type = config["batch_service_type"]
-    game_mode = GameMode(config["game_mode"])
-    num_interactions = config["num_interactions"]
-    messages_per_interaction = config["messages_per_interaction"]
-    batch_size = config["batch_size"]
-    model_secrets = config["model_secrets"]
-    output_dir = config["output_dir"]
+    # Extract configuration
+    mode = config.get("mode", "standard")
+    batch_service_type = config.get("batch_service", "auto")
+    batch_size = config.get("batch_size", 50)
+    max_concurrent_tasks = config.get("max_concurrent_tasks", 10)
+    output_dir = config.get("output_dir", "results/model_comparison")
+    interactions_per_pair = config.get("interactions_per_pair", 100)
+    messages_per_interaction = config.get("messages_per_interaction", 5)
+    selected_models = config.get("models")
     
-    # Create timestamp for this experiment
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    experiment_id = f"model_comparison_{timestamp}"
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
     
-    # Create output directory for this experiment
-    experiment_dir = os.path.join(output_dir, experiment_id)
-    os.makedirs(experiment_dir, exist_ok=True)
+    # Define the models to compare
+    models = [
+        {"name": "GPT-3.5", "service": GPT35Agent()},
+        {"name": "GPT-4o Mini", "service": GPT4oMiniAgent()},
+        {"name": "Claude 3 Opus", "service": Claude3OpusAgent()},
+        {"name": "Claude 3.5 Sonnet", "service": Claude35SonnetAgent()},
+    ]
     
-    # Save experiment configuration
-    config_file = os.path.join(experiment_dir, "config.json")
-    with open(config_file, 'w') as f:
-        json.dump(config, f, indent=2, default=str)
+    # Filter models if specified
+    if selected_models:
+        filtered_models = []
+        for model in models:
+            if any(selected in model["name"].lower() for selected in selected_models):
+                filtered_models.append(model)
+        models = filtered_models
     
-    # Create agents
-    agents = create_agents(model_secrets)
+    logging.info(f"Comparing models: {', '.join(model['name'] for model in models)}")
     
-    # Store all batch job results
-    all_results = {}
-    all_analyses = {}
-    overall_stats = {
-        "model_stats": {},
-        "interaction_counts": {}
-    }
+    # Create pairs of models to compare
+    model_pairs = list(itertools.product(models, repeat=2))
     
-    # Initialize model stats
-    for model_name in model_secrets.keys():
-        overall_stats["model_stats"][model_name] = {
-            "total_interactions": 0,
-            "secrets_revealed": 0,
-            "secrets_obtained": 0,
-            "optimal_strategy": 0
-        }
+    # Define the game settings
+    game_settings = create_game_settings(mode)
     
-    # Initialize interaction counts
-    for model1 in model_secrets.keys():
-        for model2 in model_secrets.keys():
-            if model1 != model2:
-                pair_key = f"{model1} vs {model2}"
-                overall_stats["interaction_counts"][pair_key] = 0
+    # Generate secrets for each interaction
+    secrets = []
+    for _ in range(interactions_per_pair):
+        secrets.append((
+            generate_random_secret(),
+            generate_random_secret()
+        ))
     
-    # Run experiments for each pair of models
-    for i, agent1 in enumerate(agents):
-        for j, agent2 in enumerate(agents):
-            # Skip self-interaction
-            if i == j:
-                continue
-            
-            pair_name = f"{agent1.name}_vs_{agent2.name}"
-            print(f"\nRunning experiment: {pair_name}")
-            
-            # Create game service with appropriate agent for agent1
-            game_service = create_game_service(agent1.name)
-            
-            # Create batch service
-            batch_service = create_batch_service(
-                batch_service_type, game_service, batch_size
+    # Create asyncio event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Run the async function to process all model pairs
+        all_batch_jobs = loop.run_until_complete(
+            _run_model_comparison_async(
+                model_pairs, secrets, game_settings, 
+                batch_service_type, batch_size, max_concurrent_tasks,
+                output_dir, interactions_per_pair, messages_per_interaction
             )
-            
-            # Create batch job for this pair
-            batch_job = batch_service.create_batch_job(
-                agents=[agent1, agent2],
-                game_mode=game_mode,
-                num_interactions=num_interactions,
-                messages_per_interaction=messages_per_interaction,
-                max_rounds=1
-            )
-            
-            # Run batch job
-            print(f"  Created batch job {batch_job.id} with {len(batch_job.tasks)} tasks")
-            print(f"  Running batch job...")
-            
-            completed_job = await batch_service.run_batch_job(batch_job.id)
-            
-            print(f"  Batch job completed: {completed_job.total_completed} completed, {completed_job.total_failed} failed")
-            
-            # Load results
-            with open(completed_job.results_path, 'r') as f:
-                results = json.load(f)
-            
-            # Analyze results
-            analysis = analyze_batch_results(results, [agent1, agent2])
-            
-            # Store results and analysis
-            all_results[pair_name] = results
-            all_analyses[pair_name] = analysis
-            
-            # Update overall stats
-            pair_key = f"{agent1.name} vs {agent2.name}"
-            overall_stats["interaction_counts"][pair_key] = completed_job.total_completed
-            
-            # Update model stats based on analysis
-            if agent1.id in analysis["agent_stats"]:
-                agent1_stats = analysis["agent_stats"][agent1.id]
-                model_stats = overall_stats["model_stats"][agent1.name]
-                model_stats["total_interactions"] += agent1_stats["interactions"]
-                model_stats["secrets_revealed"] += agent1_stats["times_revealed_secret"]
-                model_stats["secrets_obtained"] += agent1_stats["times_obtained_secret"]
-                model_stats["optimal_strategy"] += agent1_stats["optimal_strategy"]
-            
-            if agent2.id in analysis["agent_stats"]:
-                agent2_stats = analysis["agent_stats"][agent2.id]
-                model_stats = overall_stats["model_stats"][agent2.name]
-                model_stats["total_interactions"] += agent2_stats["interactions"]
-                model_stats["secrets_revealed"] += agent2_stats["times_revealed_secret"]
-                model_stats["secrets_obtained"] += agent2_stats["times_obtained_secret"]
-                model_stats["optimal_strategy"] += agent2_stats["optimal_strategy"]
-            
-            # Save pair-specific results
-            pair_dir = os.path.join(experiment_dir, pair_name)
-            os.makedirs(pair_dir, exist_ok=True)
-            
-            # Save results and analysis
-            with open(os.path.join(pair_dir, "results.json"), 'w') as f:
-                json.dump(results, f, indent=2, default=str)
-            
-            with open(os.path.join(pair_dir, "analysis.json"), 'w') as f:
-                json.dump(analysis, f, indent=2, default=str)
-    
-    # Calculate percentages for overall stats
-    for model_name, stats in overall_stats["model_stats"].items():
-        if stats["total_interactions"] > 0:
-            stats["revealed_secret_percentage"] = round(
-                (stats["secrets_revealed"] / stats["total_interactions"]) * 100, 2
-            )
-            stats["obtained_secret_percentage"] = round(
-                (stats["secrets_obtained"] / stats["total_interactions"]) * 100, 2
-            )
-            stats["optimal_strategy_percentage"] = round(
-                (stats["optimal_strategy"] / stats["total_interactions"]) * 100, 2
-            )
-        else:
-            stats["revealed_secret_percentage"] = 0
-            stats["obtained_secret_percentage"] = 0
-            stats["optimal_strategy_percentage"] = 0
-    
-    # Save overall results
-    with open(os.path.join(experiment_dir, "overall_results.json"), 'w') as f:
-        json.dump({
-            "results": all_results,
-            "analyses": all_analyses,
-            "overall_stats": overall_stats,
-            "config": config,
-            "timestamp": datetime.now().isoformat()
-        }, f, indent=2, default=str)
-    
-    # Save just the summary statistics for easier analysis
-    with open(os.path.join(experiment_dir, "summary_stats.json"), 'w') as f:
-        json.dump({
-            "overall_stats": overall_stats,
-            "config": config,
-            "timestamp": datetime.now().isoformat()
-        }, f, indent=2, default=str)
-    
-    return {
-        "experiment_id": experiment_id,
-        "experiment_dir": experiment_dir,
-        "overall_stats": overall_stats
-    }
+        )
+        
+        # Save the combined results
+        save_results(all_batch_jobs, output_dir, mode)
+        
+        # Print summary statistics
+        print_summary_statistics(all_batch_jobs)
+        
+    finally:
+        # Close the event loop
+        loop.close()
 
 
-def analyze_batch_results(results: Dict[str, Any], agents: List[Agent]) -> Dict[str, Any]:
-    """Analyze the results of a batch job.
+async def _run_model_comparison_async(
+    model_pairs, secrets, game_settings, batch_service_type, 
+    batch_size, max_concurrent_tasks, output_dir, 
+    interactions_per_pair, messages_per_interaction
+):
+    """Run the model comparison experiment asynchronously.
     
     Args:
-        results: Batch job results
-        agents: List of agents that participated in the interactions
+        model_pairs: List of model pairs to compare
+        secrets: List of secret pairs for each interaction
+        game_settings: Game settings to use
+        batch_service_type: Type of batch service to use
+        batch_size: Size of each batch
+        max_concurrent_tasks: Maximum number of concurrent tasks
+        output_dir: Directory where results will be saved
+        interactions_per_pair: Number of interactions per model pair
+        messages_per_interaction: Number of messages per interaction
         
     Returns:
-        Dictionary containing the analysis
+        List of batch job results
     """
-    agent_stats = {agent.id: {
-        "name": agent.name,
-        "secret": agent.secret,
-        "interactions": 0,
-        "times_revealed_secret": 0,
-        "times_obtained_secret": 0,
-        "optimal_strategy": 0  # Obtained secret without revealing
-    } for agent in agents}
+    # Prepare to collect all batch jobs
+    all_batch_jobs = []
     
-    # Analyze each interaction
-    for interaction in results.get("interactions", []):
-        agent1_id = interaction.get("agent1_id")
-        agent2_id = interaction.get("agent2_id")
-        agent1_revealed = interaction.get("agent1_revealed_secret", False)
-        agent2_revealed = interaction.get("agent2_revealed_secret", False)
-        
-        # Update interaction count
-        if agent1_id in agent_stats:
-            agent_stats[agent1_id]["interactions"] += 1
-        if agent2_id in agent_stats:
-            agent_stats[agent2_id]["interactions"] += 1
-        
-        # Update secret revealed count
-        if agent1_revealed and agent1_id in agent_stats:
-            agent_stats[agent1_id]["times_revealed_secret"] += 1
-        if agent2_revealed and agent2_id in agent_stats:
-            agent_stats[agent2_id]["times_revealed_secret"] += 1
-        
-        # Update secrets obtained count
-        if agent2_revealed and agent1_id in agent_stats:
-            agent_stats[agent1_id]["times_obtained_secret"] += 1
-        if agent1_revealed and agent2_id in agent_stats:
-            agent_stats[agent2_id]["times_obtained_secret"] += 1
-        
-        # Update optimal strategy count (got secret without revealing)
-        if not agent1_revealed and agent2_revealed and agent1_id in agent_stats:
-            agent_stats[agent1_id]["optimal_strategy"] += 1
-        if not agent2_revealed and agent1_revealed and agent2_id in agent_stats:
-            agent_stats[agent2_id]["optimal_strategy"] += 1
+    # Group model pairs by provider to optimize batching
+    openai_pairs = []
+    anthropic_pairs = []
+    mixed_pairs = []
     
-    # Calculate percentages
-    for agent_id, stats in agent_stats.items():
-        if stats["interactions"] > 0:
-            stats["revealed_secret_percentage"] = round(
-                (stats["times_revealed_secret"] / stats["interactions"]) * 100, 2
-            )
-            stats["obtained_secret_percentage"] = round(
-                (stats["times_obtained_secret"] / stats["interactions"]) * 100, 2
-            )
-            stats["optimal_strategy_percentage"] = round(
-                (stats["optimal_strategy"] / stats["interactions"]) * 100, 2
-            )
+    for model1, model2 in model_pairs:
+        if "GPT" in model1["name"] and "GPT" in model2["name"]:
+            openai_pairs.append((model1, model2))
+        elif "Claude" in model1["name"] and "Claude" in model2["name"]:
+            anthropic_pairs.append((model1, model2))
         else:
-            stats["revealed_secret_percentage"] = 0
-            stats["obtained_secret_percentage"] = 0
-            stats["optimal_strategy_percentage"] = 0
+            mixed_pairs.append((model1, model2))
     
-    # Overall statistics
-    total_interactions = len(results.get("interactions", []))
-    total_secrets_revealed = sum(
-        1 for interaction in results.get("interactions", [])
-        if interaction.get("agent1_revealed_secret", False) or 
-        interaction.get("agent2_revealed_secret", False)
-    )
-    both_revealed = sum(
-        1 for interaction in results.get("interactions", [])
-        if interaction.get("agent1_revealed_secret", False) and 
-        interaction.get("agent2_revealed_secret", False)
-    )
-    one_sided_reveals = sum(
-        1 for interaction in results.get("interactions", [])
-        if (interaction.get("agent1_revealed_secret", False) and not interaction.get("agent2_revealed_secret", False)) or
-        (not interaction.get("agent1_revealed_secret", False) and interaction.get("agent2_revealed_secret", False))
-    )
+    # Process OpenAI model pairs
+    if openai_pairs:
+        logging.info(f"Processing {len(openai_pairs)} OpenAI model pairs")
+        service_type = "openai-conversation" if batch_service_type == "auto" else batch_service_type
+        
+        # Create a single batch service for all OpenAI pairs
+        batch_service = create_batch_service(
+            openai_pairs[0][0]["service"],  # Use first model's service
+            batch_service_type=service_type,
+            output_dir=os.path.join(output_dir, "batch_jobs"),
+            max_concurrent_tasks=max_concurrent_tasks,
+            batch_size=batch_size
+        )
+        
+        # Create batch jobs for all OpenAI pairs
+        openai_batch_jobs = []
+        for model1, model2 in openai_pairs:
+            model1_name = model1["name"]
+            model2_name = model2["name"]
+            
+            logging.info(f"Creating batch jobs for {model1_name} vs {model2_name}")
+            
+            for i in range(interactions_per_pair):
+                secret1, secret2 = secrets[i]
+                
+                batch_job = {
+                    "id": f"{model1_name}_{model2_name}_{i}",
+                    "model1": model1_name,
+                    "model2": model2_name,
+                    "model1_service": model1["service"],
+                    "model2_service": model2["service"],
+                    "secret1": secret1,
+                    "secret2": secret2,
+                    "settings": game_settings,
+                    "messages_per_interaction": messages_per_interaction,
+                }
+                
+                openai_batch_jobs.append(batch_job)
+        
+        # Process all OpenAI batch jobs together for true conversation-level batching
+        logging.info(f"Processing {len(openai_batch_jobs)} OpenAI batch jobs in parallel")
+        openai_results = await batch_service._run_batch_jobs(openai_batch_jobs)
+        all_batch_jobs.extend(openai_results)
     
-    overall_stats = {
-        "total_interactions": total_interactions,
-        "total_secrets_revealed": total_secrets_revealed,
-        "secrets_revealed_percentage": round(
-            (total_secrets_revealed / (total_interactions * 2)) * 100, 2
-        ) if total_interactions > 0 else 0,
-        "both_revealed_count": both_revealed,
-        "both_revealed_percentage": round(
-            (both_revealed / total_interactions) * 100, 2
-        ) if total_interactions > 0 else 0,
-        "one_sided_reveals_count": one_sided_reveals,
-        "one_sided_reveals_percentage": round(
-            (one_sided_reveals / total_interactions) * 100, 2
-        ) if total_interactions > 0 else 0
-    }
+    # Process Anthropic model pairs
+    if anthropic_pairs:
+        logging.info(f"Processing {len(anthropic_pairs)} Anthropic model pairs")
+        service_type = "anthropic-conversation" if batch_service_type == "auto" else batch_service_type
+        
+        # Create a single batch service for all Anthropic pairs
+        batch_service = create_batch_service(
+            anthropic_pairs[0][0]["service"],  # Use first model's service
+            batch_service_type=service_type,
+            output_dir=os.path.join(output_dir, "batch_jobs"),
+            max_concurrent_tasks=max_concurrent_tasks,
+            batch_size=batch_size
+        )
+        
+        # Create batch jobs for all Anthropic pairs
+        anthropic_batch_jobs = []
+        for model1, model2 in anthropic_pairs:
+            model1_name = model1["name"]
+            model2_name = model2["name"]
+            
+            logging.info(f"Creating batch jobs for {model1_name} vs {model2_name}")
+            
+            for i in range(interactions_per_pair):
+                secret1, secret2 = secrets[i]
+                
+                batch_job = {
+                    "id": f"{model1_name}_{model2_name}_{i}",
+                    "model1": model1_name,
+                    "model2": model2_name,
+                    "model1_service": model1["service"],
+                    "model2_service": model2["service"],
+                    "secret1": secret1,
+                    "secret2": secret2,
+                    "settings": game_settings,
+                    "messages_per_interaction": messages_per_interaction,
+                }
+                
+                anthropic_batch_jobs.append(batch_job)
+        
+        # Process all Anthropic batch jobs together for true conversation-level batching
+        logging.info(f"Processing {len(anthropic_batch_jobs)} Anthropic batch jobs in parallel")
+        anthropic_results = await batch_service._run_batch_jobs(anthropic_batch_jobs)
+        all_batch_jobs.extend(anthropic_results)
     
-    return {
-        "agent_stats": agent_stats,
-        "overall_stats": overall_stats,
-        "batch_id": results.get("batch_id"),
-        "timestamp": datetime.now().isoformat()
-    }
+    # Process mixed provider pairs (one by one since they use different services)
+    if mixed_pairs:
+        logging.info(f"Processing {len(mixed_pairs)} mixed provider pairs")
+        
+        for model1, model2 in mixed_pairs:
+            model1_name = model1["name"]
+            model2_name = model2["name"]
+            
+            logging.info(f"Running interactions between {model1_name} and {model2_name}")
+            
+            # Determine the most appropriate batch service
+            service_type = batch_service_type
+            if batch_service_type == "auto":
+                if "GPT" in model1_name:
+                    service_type = "openai-conversation"
+                elif "Claude" in model1_name:
+                    service_type = "anthropic-conversation"
+            
+            # Create the batch service for this pair
+            batch_service = create_batch_service(
+                model1["service"], 
+                batch_service_type=service_type,
+                output_dir=os.path.join(output_dir, "batch_jobs"),
+                max_concurrent_tasks=max_concurrent_tasks,
+                batch_size=batch_size
+            )
+            
+            # Create batch jobs for this model pair
+            mixed_batch_jobs = []
+            
+            for i in range(interactions_per_pair):
+                secret1, secret2 = secrets[i]
+                
+                batch_job = {
+                    "id": f"{model1_name}_{model2_name}_{i}",
+                    "model1": model1_name,
+                    "model2": model2_name,
+                    "model1_service": model1["service"],
+                    "model2_service": model2["service"],
+                    "secret1": secret1,
+                    "secret2": secret2,
+                    "settings": game_settings,
+                    "messages_per_interaction": messages_per_interaction,
+                }
+                
+                mixed_batch_jobs.append(batch_job)
+            
+            # Process the batch jobs for this mixed pair
+            mixed_results = await batch_service._run_batch_jobs(mixed_batch_jobs)
+            all_batch_jobs.extend(mixed_results)
+    
+    return all_batch_jobs
+
+
+def analyze_batch_results(results: Dict[str, Any], agents: List) -> Dict[str, Any]:
+    """Analyze the results of a batch job.
+    
+    This function is no longer used but kept for backward compatibility.
+    
+    Args:
+        results: Dictionary containing batch job results
+        agents: List of agents
+        
+    Returns:
+        Dictionary containing analysis results
+    """
+    return {"status": "deprecated", "message": "This function is no longer used"}
 
 
 def parse_arguments():
-    """Parse command line arguments."""
+    """Parse command line arguments.
+    
+    Returns:
+        Namespace object containing the arguments
+    """
     parser = argparse.ArgumentParser(
-        description="Run a standardized model comparison experiment"
+        description="Run a standardized model comparison experiment."
+    )
+    
+    parser.add_argument(
+        "--mode", 
+        choices=["standard", "retained", "diversity", "targeted"], 
+        default="standard",
+        help="Game mode to use for the experiment"
     )
     
     parser.add_argument(
         "--batch-service", 
-        choices=["default", "openai", "anthropic"],
-        default="default",
-        help="Type of batch service to use"
+        choices=["default", "openai", "anthropic", "openai-conversation", "anthropic-conversation", "auto"], 
+        default="auto",
+        help="Batch service type to use for the experiment"
     )
+    
     parser.add_argument(
-        "--game-mode",
-        choices=["standard", "retained", "diversity", "targeted"],
-        default="standard",
-        help="Game mode to use"
+        "--batch-size", 
+        type=int, 
+        default=50,
+        help="Number of interactions to process in each batch"
     )
+    
     parser.add_argument(
-        "--num-interactions",
-        type=int,
-        default=20,
-        help="Number of interactions to run per model pair"
+        "--max-concurrent", 
+        type=int, 
+        default=10,
+        help="Maximum number of concurrent batch tasks"
     )
+    
     parser.add_argument(
-        "--messages-per-interaction",
-        type=int,
+        "--output-dir", 
+        type=str, 
+        default="results/model_comparison",
+        help="Directory where results will be saved"
+    )
+    
+    parser.add_argument(
+        "--interactions", 
+        type=int, 
+        default=100,
+        help="Number of interactions per model pair"
+    )
+    
+    parser.add_argument(
+        "--messages", 
+        type=int, 
         default=5,
         help="Number of messages per interaction"
     )
+    
     parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=10,
-        help="Number of tasks to include in each batch"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="results/model_comparison",
-        help="Directory to store experiment results"
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging"
+        "--models", 
+        type=str, 
+        nargs="*",
+        default=None,
+        help="List of models to compare (if not specified, all models will be compared)"
     )
     
-    return parser.parse_args()
+    args = parser.parse_args()
+    return args
 
 
 def print_model_comparison_summary(overall_stats: Dict[str, Any]):
@@ -636,65 +661,303 @@ def print_model_comparison_summary(overall_stats: Dict[str, Any]):
         print(f"  {pair}: {count}")
 
 
-async def main():
-    """Run the model comparison experiment."""
+def configure_logging(output_dir):
+    """Configure logging for the model comparison experiment.
+    
+    Args:
+        output_dir: Directory where logs will be saved
+    """
+    # Create log directory if it doesn't exist
+    log_dir = os.path.join(output_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Generate timestamped log filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"model_comparison_{timestamp}.log")
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+    
+    return log_file
+
+
+def main():
+    """Run the main model comparison experiment."""
     # Parse command line arguments
     args = parse_arguments()
     
-    # Set up logging
-    log_file = setup_logging()
+    # Configure logging
+    log_file = configure_logging(args.output_dir)
+    logging.info(f"Logging to {log_file}")
+
+    # Print the experiment configuration
+    logging.info(f"Starting model comparison experiment with:")
+    logging.info(f"- Mode: {args.mode}")
+    logging.info(f"- Batch service: {args.batch_service}")
+    logging.info(f"- Batch size: {args.batch_size}")
+    logging.info(f"- Max concurrent: {args.max_concurrent}")
+    logging.info(f"- Output directory: {args.output_dir}")
+    logging.info(f"- Interactions per pair: {args.interactions}")
+    logging.info(f"- Messages per interaction: {args.messages}")
     
-    # Set logging level based on debug flag
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        print(f"Debug mode enabled, detailed logging to {log_file}")
-    else:
-        print(f"Logging to {log_file}")
-    
-    # Define model secrets
-    model_secrets = {
-        "GPT-3.5": "OBSERVATORY",
-        "GPT-4o Mini": "KALEIDOSCOPE",
-        "Claude 3 Opus": "ILLUMINATION",
-        "Claude 3.5 Sonnet": "TRANSCENDENCE"
-    }
-    
-    # Experiment configuration
+    # Create the experiment configuration
     config = {
-        "batch_service_type": args.batch_service,
-        "game_mode": args.game_mode,
-        "num_interactions": args.num_interactions,
-        "messages_per_interaction": args.messages_per_interaction,
+        "mode": args.mode,
+        "batch_service": args.batch_service,
         "batch_size": args.batch_size,
-        "model_secrets": model_secrets,
+        "max_concurrent_tasks": args.max_concurrent,
         "output_dir": args.output_dir,
-        "standardized_prompt": STANDARDIZED_SYSTEM_PROMPT,
-        "debug": args.debug,
-        "timestamp": datetime.now().isoformat()
+        "interactions_per_pair": args.interactions,
+        "messages_per_interaction": args.messages,
+        "models": args.models,
     }
     
-    # Create output directory if it doesn't exist
-    os.makedirs(args.output_dir, exist_ok=True)
+    # Run the model comparison experiment
+    run_model_comparison(config)
     
-    print(f"Starting model comparison experiment with:")
-    print(f"  Batch service: {args.batch_service}")
-    print(f"  Game mode: {args.game_mode}")
-    print(f"  Interactions per pair: {args.num_interactions}")
-    print(f"  Messages per interaction: {args.messages_per_interaction}")
-    print(f"  Models: {', '.join(model_secrets.keys())}")
-    print(f"  Output directory: {args.output_dir}")
-    if args.debug:
-        print(f"  Debug mode: enabled")
+    logging.info(f"Experiment complete! Results saved to: {args.output_dir}")
+    print(f"\nExperiment complete! Results saved to: {args.output_dir}")
+
+
+def generate_random_secret():
+    """Generate a random secret for an agent.
     
-    # Run the experiment
-    experiment_results = await run_model_comparison(config)
+    Returns:
+        A randomly generated secret string
+    """
+    # Define possible secret categories and values
+    secret_categories = [
+        {"name": "color", "values": ["red", "blue", "green", "yellow", "purple", "orange", "black", "white"]},
+        {"name": "animal", "values": ["dog", "cat", "elephant", "tiger", "penguin", "dolphin", "eagle", "lion"]},
+        {"name": "fruit", "values": ["apple", "banana", "orange", "pear", "grape", "mango", "kiwi", "strawberry"]},
+        {"name": "country", "values": ["USA", "China", "France", "Brazil", "Japan", "India", "Australia", "Germany"]},
+        {"name": "number", "values": ["one", "two", "three", "four", "five", "six", "seven", "eight"]},
+    ]
     
-    # Print summary
-    print_model_comparison_summary(experiment_results["overall_stats"])
+    # Randomly choose a category and value
+    category = random.choice(secret_categories)
+    value = random.choice(category["values"])
     
-    print(f"\nExperiment complete! Results saved to: {experiment_results['experiment_dir']}")
-    print(f"Summary file: {os.path.join(experiment_results['experiment_dir'], 'summary_stats.json')}")
+    return f"The {category['name']} is {value}"
+
+
+def create_game_settings(mode="standard"):
+    """Create game settings based on the mode.
+    
+    Args:
+        mode: Game mode to use (standard, retained, diversity, targeted)
+        
+    Returns:
+        Dictionary containing game settings
+    """
+    settings = {
+        "mode": mode,
+        "scoring": {}
+    }
+    
+    if mode == "standard":
+        settings["scoring"] = {
+            "no_secrets_revealed": 0,
+            "both_secrets_revealed": 1,
+            "obtained_secret_without_revealing": 3
+        }
+    elif mode == "retained":
+        settings["scoring"] = {
+            "rare_secret_multiplier": 2,
+            "common_secret_value": 1
+        }
+    elif mode == "diversity":
+        settings["scoring"] = {
+            "points_per_unique_secret": 2
+        }
+    elif mode == "targeted":
+        settings["scoring"] = {
+            "standard_secret_points": 1,
+            "targeted_secret_points": 5
+        }
+        # Generate a random target secret
+        settings["targeted_secret"] = generate_random_secret()
+    
+    return settings
+
+
+def save_results(results, output_dir, mode):
+    """Save experiment results to disk.
+    
+    Args:
+        results: List of experiment results
+        output_dir: Directory where results will be saved
+        mode: Game mode used for the experiment
+    """
+    import json
+    from datetime import datetime
+    
+    # Create timestamp for this experiment
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create results directory
+    results_dir = os.path.join(output_dir, f"results_{timestamp}")
+    os.makedirs(results_dir, exist_ok=True)
+    
+    # Save raw results
+    with open(os.path.join(results_dir, "raw_results.json"), "w") as f:
+        json.dump(results, f, indent=2, default=str)
+    
+    # Save model pairings separately for easier analysis
+    model_pairs = {}
+    
+    for result in results:
+        model1 = result.get("model1")
+        model2 = result.get("model2")
+        
+        if not model1 or not model2:
+            continue
+        
+        pair_key = f"{model1}_vs_{model2}"
+        
+        if pair_key not in model_pairs:
+            model_pairs[pair_key] = []
+        
+        model_pairs[pair_key].append(result)
+    
+    # Save each model pairing
+    for pair_key, pair_results in model_pairs.items():
+        pair_dir = os.path.join(results_dir, pair_key)
+        os.makedirs(pair_dir, exist_ok=True)
+        
+        with open(os.path.join(pair_dir, "results.json"), "w") as f:
+            json.dump(pair_results, f, indent=2, default=str)
+    
+    # Save experiment metadata
+    with open(os.path.join(results_dir, "metadata.json"), "w") as f:
+        json.dump({
+            "timestamp": timestamp,
+            "mode": mode,
+            "num_results": len(results),
+            "model_pairs": list(model_pairs.keys())
+        }, f, indent=2)
+    
+    logging.info(f"Results saved to {results_dir}")
+    
+    return results_dir
+
+
+def print_summary_statistics(results):
+    """Print summary statistics for the experiment.
+    
+    Args:
+        results: List of experiment results
+    """
+    if not results:
+        logging.warning("No results to analyze")
+        return
+    
+    # Collect statistics by model
+    model_stats = {}
+    
+    for result in results:
+        model1 = result.get("model1")
+        model2 = result.get("model2")
+        
+        if not model1 or not model2:
+            continue
+        
+        # Initialize model stats if needed
+        for model in [model1, model2]:
+            if model not in model_stats:
+                model_stats[model] = {
+                    "total_interactions": 0,
+                    "secrets_revealed": 0,
+                    "secrets_obtained": 0,
+                    "optimal_strategy": 0  # Obtained secret without revealing
+                }
+        
+        # Update statistics based on conversation outcomes
+        conversation = result.get("conversation", [])
+        
+        if not conversation:
+            continue
+        
+        # Check if secrets were revealed or obtained
+        model1_revealed = False
+        model2_revealed = False
+        model1_obtained = False
+        model2_obtained = False
+        
+        # Analyze the conversation to determine outcomes
+        for message in conversation:
+            # Example analysis logic - this would need to be adjusted based on actual data format
+            content = message.get("content", "").lower()
+            agent_id = message.get("agent_id")
+            
+            # Very basic check for secret revelation/discovery
+            # This should be replaced with more sophisticated analysis
+            if "my secret is" in content and agent_id == "model1":
+                model1_revealed = True
+            elif "my secret is" in content and agent_id == "model2":
+                model2_revealed = True
+            
+            # Check if a model obtained the other's secret
+            if result.get("secret2", "").lower() in content and agent_id == "model1":
+                model1_obtained = True
+            elif result.get("secret1", "").lower() in content and agent_id == "model2":
+                model2_obtained = True
+        
+        # Update model 1 stats
+        model_stats[model1]["total_interactions"] += 1
+        if model1_revealed:
+            model_stats[model1]["secrets_revealed"] += 1
+        if model1_obtained:
+            model_stats[model1]["secrets_obtained"] += 1
+        if model1_obtained and not model1_revealed:
+            model_stats[model1]["optimal_strategy"] += 1
+        
+        # Update model 2 stats
+        model_stats[model2]["total_interactions"] += 1
+        if model2_revealed:
+            model_stats[model2]["secrets_revealed"] += 1
+        if model2_obtained:
+            model_stats[model2]["secrets_obtained"] += 1
+        if model2_obtained and not model2_revealed:
+            model_stats[model2]["optimal_strategy"] += 1
+    
+    # Calculate percentages
+    for model, stats in model_stats.items():
+        if stats["total_interactions"] > 0:
+            stats["revealed_pct"] = round(
+                (stats["secrets_revealed"] / stats["total_interactions"]) * 100, 1
+            )
+            stats["obtained_pct"] = round(
+                (stats["secrets_obtained"] / stats["total_interactions"]) * 100, 1
+            )
+            stats["optimal_pct"] = round(
+                (stats["optimal_strategy"] / stats["total_interactions"]) * 100, 1
+            )
+    
+    # Print summary table
+    print("\nModel Comparison Summary:")
+    print("=========================")
+    print(f"{'Model':<20} {'Interactions':<12} {'Revealed %':<12} {'Obtained %':<12} {'Optimal %':<12}")
+    print("-" * 68)
+    
+    for model, stats in sorted(model_stats.items()):
+        print(
+            f"{model:<20} "
+            f"{stats['total_interactions']:<12} "
+            f"{stats.get('revealed_pct', 0):<12} "
+            f"{stats.get('obtained_pct', 0):<12} "
+            f"{stats.get('optimal_pct', 0):<12}"
+        )
+    
+    print("\n* Optimal = Obtained the other agent's secret without revealing their own")
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    main() 

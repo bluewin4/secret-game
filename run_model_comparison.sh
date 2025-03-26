@@ -4,30 +4,32 @@
 # Script for running standardized model comparison experiment
 
 # Default values
-BATCH_SERVICE="default"
-GAME_MODE="standard"
-NUM_INTERACTIONS=20
-MESSAGES_PER_INTERACTION=5
-BATCH_SIZE=10
+INTERACTIONS=20
+MESSAGES=5
+MODE="standard"
+BATCH_SERVICE="auto"
+BATCH_SIZE=50
+MAX_CONCURRENT=10
 OUTPUT_DIR="results/model_comparison"
-DEBUG=false
+MODELS=""
 
 # Function to display help/usage
 show_help() {
-    echo "Usage: ./run_model_comparison.sh [OPTIONS]"
+    echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  --batch-service SERVICE       Batch service to use (default|openai|anthropic)"
-    echo "  --game-mode MODE              Game mode (standard|retained|diversity|targeted)"
-    echo "  --interactions NUM            Number of interactions to process per model pair"
-    echo "  --messages NUM                Number of messages per interaction"
-    echo "  --batch-size SIZE             Number of tasks in each batch"
-    echo "  --output-dir DIR              Directory to store experiment results"
-    echo "  --debug                       Enable debug logging"
-    echo "  --help                        Display this help message"
+    echo "  --interactions N        Number of interactions per model pair (default: $INTERACTIONS)"
+    echo "  --messages N            Number of messages per interaction (default: $MESSAGES)"
+    echo "  --mode MODE             Game mode to use: standard, retained, diversity, targeted (default: $MODE)"
+    echo "  --batch-service TYPE    Batch service to use: default, openai, anthropic, openai-conversation, anthropic-conversation, auto (default: $BATCH_SERVICE)"
+    echo "  --batch-size N          Number of interactions to process in each batch (default: $BATCH_SIZE)"
+    echo "  --max-concurrent N      Maximum number of concurrent batch tasks (default: $MAX_CONCURRENT)"
+    echo "  --output-dir DIR        Directory where results will be saved (default: $OUTPUT_DIR)"
+    echo "  --models MODEL1,MODEL2  Specific models to compare (comma-separated, default: all models)"
+    echo "  --help                  Show this help message"
     echo ""
     echo "Example:"
-    echo "  ./run_model_comparison.sh --batch-service openai --interactions 50 --messages 5"
+    echo "  $0 --interactions 50 --messages 3 --mode standard --batch-service auto"
     echo ""
     echo "Description:"
     echo "  This script runs a large-scale standardized experiment to compare the"
@@ -39,34 +41,40 @@ show_help() {
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --batch-service)
-            BATCH_SERVICE="$2"
-            shift 2
-            ;;
-        --game-mode)
-            GAME_MODE="$2"
-            shift 2
-            ;;
+    case $1 in
         --interactions)
-            NUM_INTERACTIONS="$2"
+            INTERACTIONS="$2"
             shift 2
             ;;
         --messages)
-            MESSAGES_PER_INTERACTION="$2"
+            MESSAGES="$2"
+            shift 2
+            ;;
+        --mode)
+            MODE="$2"
+            shift 2
+            ;;
+        --batch-service)
+            BATCH_SERVICE="$2"
             shift 2
             ;;
         --batch-size)
             BATCH_SIZE="$2"
             shift 2
             ;;
+        --max-concurrent)
+            MAX_CONCURRENT="$2"
+            shift 2
+            ;;
         --output-dir)
             OUTPUT_DIR="$2"
             shift 2
             ;;
-        --debug)
-            DEBUG=true
-            shift
+        --models)
+            MODELS="$2"
+            # Convert comma-separated list to space-separated for command line args
+            MODELS="${MODELS//,/ }"
+            shift 2
             ;;
         --help)
             show_help
@@ -78,27 +86,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate batch service
-if [[ "$BATCH_SERVICE" != "default" && "$BATCH_SERVICE" != "openai" && "$BATCH_SERVICE" != "anthropic" ]]; then
-    echo "Error: Invalid batch service '$BATCH_SERVICE'. Must be one of: default, openai, anthropic"
-    exit 1
-fi
-
-# Validate game mode
-if [[ "$GAME_MODE" != "standard" && "$GAME_MODE" != "retained" && "$GAME_MODE" != "diversity" && "$GAME_MODE" != "targeted" ]]; then
-    echo "Error: Invalid game mode '$GAME_MODE'. Must be one of: standard, retained, diversity, targeted"
-    exit 1
+# Make sure environment variables are loaded
+if [ -f .env ]; then
+    echo "Loading environment variables from .env file"
+    export $(grep -v '^#' .env | xargs)
+else
+    echo "No .env file found, using existing environment variables"
 fi
 
 # Display run configuration
 echo "Running model comparison experiment with the following configuration:"
+echo "  Interactions/Pair:    $INTERACTIONS"
+echo "  Messages/Interaction: $MESSAGES"
+echo "  Game Mode:            $MODE"
 echo "  Batch Service:        $BATCH_SERVICE"
-echo "  Game Mode:            $GAME_MODE"
-echo "  Interactions/Pair:    $NUM_INTERACTIONS"
-echo "  Messages/Interaction: $MESSAGES_PER_INTERACTION"
 echo "  Batch Size:           $BATCH_SIZE"
+echo "  Max Concurrent:      $MAX_CONCURRENT"
 echo "  Output Directory:     $OUTPUT_DIR"
-echo "  Debug:                $DEBUG"
+echo "  Models:               $MODELS"
 echo ""
 echo "This will compare GPT-3.5, GPT-4o Mini, Claude 3 Opus, and Claude 3.5 Sonnet"
 echo "using a standardized prompt across all models."
@@ -110,12 +115,19 @@ if ! command -v python &> /dev/null; then
     exit 1
 fi
 
-# Construct the command
-CMD="python examples/model_comparison_study.py --batch-service $BATCH_SERVICE --game-mode $GAME_MODE --num-interactions $NUM_INTERACTIONS --messages-per-interaction $MESSAGES_PER_INTERACTION --batch-size $BATCH_SIZE --output-dir $OUTPUT_DIR"
+# Build the command
+CMD="python examples/model_comparison_study.py"
+CMD+=" --interactions $INTERACTIONS"
+CMD+=" --messages $MESSAGES"
+CMD+=" --mode $MODE"
+CMD+=" --batch-service $BATCH_SERVICE"
+CMD+=" --batch-size $BATCH_SIZE"
+CMD+=" --max-concurrent $MAX_CONCURRENT"
+CMD+=" --output-dir $OUTPUT_DIR"
 
-# Add debug flag if enabled
-if [[ "$DEBUG" == "true" ]]; then
-    CMD="$CMD --debug"
+# Add models if specified
+if [ -n "$MODELS" ]; then
+    CMD+=" --models $MODELS"
 fi
 
 # Run the command
